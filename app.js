@@ -65,6 +65,17 @@ function seededShuffle(arr, seedStr){
   }
 })();
 
+/* 题干、选项、解析里全是 < >（1/a < 1/b、|x| > 2），直接进 innerHTML 会被当标签。
+ * 打乱之后再统一转义，顺序不能反——打乱的种子用了原始题干。 */
+(function escapeQuiz(){
+  const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  Object.values(QUIZ).forEach(arr => arr.forEach(q => {
+    q.q = esc(q.q);
+    q.o = q.o.map(esc);
+    q.why = esc(q.why);
+  }));
+})();
+
 function softOf(id){ return SOFT_PRE[id] || []; }
 function isSoft(child, parent){ return softOf(child).includes(parent); }
 function hardPre(id){ return (byId[id].pre || []).filter(p => !isSoft(id, p)); }
@@ -181,6 +192,32 @@ const REVIEW_GAP = [1, 3, 7, 15];            // 错题复习间隔（天）
 const hasQuiz = id => !!(QUIZ[id] && QUIZ[id].length);
 const bestRate = id => (state.progress[id] && state.progress[id].best) || 0;
 const quizCount = () => Object.keys(QUIZ).reduce((a, k) => a + QUIZ[k].length, 0);
+
+/* 及格题数。注意：题量 1~3 时 ceil(n×0.8) 就等于 n，也就是必须全对。
+ * 文案不能写「≥80%」——3/3 是 100%，那样等于自己打自己。 */
+const needRight = n => Math.max(1, Math.ceil(n * QUIT_PASS));
+function quizRule(n){
+  const need = needRight(n);
+  return need >= n ? `这课 ${n} 题要全对` : `这课 ${n} 题要答对 ${need} 题`;
+}
+
+/* 当时做对了但前置没齐，后来前置补齐了 —— 不该让学生再考一遍。
+ * 每次渲染前扫一遍：成绩够格 + 前置齐 = 直接点亮。 */
+function sweepLitByScore(){
+  let changed = true, dirty = false;
+  while (changed){
+    changed = false;
+    for (const sid of Object.keys(state.progress)){
+      if (state.lit.has(sid) || !byId[sid]) continue;
+      if ((state.progress[sid].best || 0) < QUIT_PASS) continue;
+      if (hardPre(sid).every(x => state.lit.has(x))){
+        state.lit.add(sid);
+        changed = true; dirty = true;
+      }
+    }
+  }
+  return dirty;
+}
 
 /* 错题按遗忘曲线排期：答错回第 0 档、1 天后复习；答对往后一档；4 档全过就移出错题本 */
 function scheduleWrong(sid, qi, correct){
@@ -392,7 +429,10 @@ function renderDomain(domId){
  *  视图：重要度排行
  * ======================================================================= */
 function renderRank(){
-  const qf = state.qFilter;
+  // qf 可能是从 URL 带进来的，只认这三个值，别的一律忽略
+  const QF_OK = ['选择', '填空', '解答'];
+  const qf = QF_OK.includes(state.qFilter) ? state.qFilter : '';
+  state.qFilter = qf;
   let vis = visibleSkills().slice();
   if (qf) vis = vis.filter(s => (s.q || []).includes(qf));
   vis.sort((a, b) => {
@@ -412,21 +452,33 @@ function renderRank(){
       <span style="margin-left:8px">分值口径：2014~2024 各板块平均分值 + 近年真题逐题评述，不是考纲的"了解/理解/掌握"</span>
     </div>`;
 
-  let cur = null;
-  vis.forEach(s => {
-    if (s.lv !== cur){
-      cur = s.lv;
-      html += `<div class="rank-group"><span class="rank-badge lv-${cur}">${cur}</span>${groupName[cur]}</div>`;
-    }
+  /* 预备层单独放：它不出独立考题，混在「A 主力 / B 常考」里会误导时间分配 */
+  const rankRow = s => {
     const d = domById[s.d];
     const q = (s.q || []).length ? s.q.map(x => `<span class="tag q">${x}</span>`).join(' ') : '<span class="tag">不考</span>';
-    html += `<div class="rank-row" data-skill="${s.id}">
+    return `<div class="rank-row" data-skill="${s.id}">
       <span class="rank-badge lv-${s.lv}">${s.lv}</span>
       <span class="nm">${s.n}</span>
       <span class="dom" style="color:${d.color}88">${d.short}</span>
       <span class="how">${s.how}</span>
       <span style="display:flex;gap:4px">${q}</span>
     </div>`;
+  };
+
+  const prepList = vis.filter(s => s.d === 'prep');
+  if (prepList.length){
+    html += `<div class="rank-group"><span class="rank-badge" style="background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d;white-space:nowrap">地基</span>
+      不单独占分，但缺哪条后面都会塌 —— 这 9 条不按 A/B/C/D 排，全都要会</div>`;
+    html += prepList.map(rankRow).join('');
+  }
+
+  let cur = null;
+  vis.filter(s => s.d !== 'prep').forEach(s => {
+    if (s.lv !== cur){
+      cur = s.lv;
+      html += `<div class="rank-group"><span class="rank-badge lv-${cur}">${cur}</span>${groupName[cur]}</div>`;
+    }
+    html += rankRow(s);
   });
 
   document.getElementById('main').innerHTML = html;
@@ -442,8 +494,8 @@ function renderSearch(){
     return hay.includes(q);
   });
   if (!hits.length){
-    document.getElementById('main').innerHTML =
-      `<div class="empty">没搜到「${state.query}」<br><span>换个说法试试，比如只搜两个字</span></div>`;
+    main.innerHTML =
+      `<div class="empty">没搜到「${escHtml(state.query)}」<br><span>换个说法试试，比如只搜两个字</span></div>`;
     return;
   }
   const rows = hits.map(s => {
@@ -456,7 +508,7 @@ function renderSearch(){
     </div>`;
   }).join('');
   document.getElementById('main').innerHTML =
-    `<div class="sec-title"><h2>「${state.query}」的 ${hits.length} 个结果</h2></div>${rows}`;
+    `<div class="sec-title"><h2>「${escHtml(state.query)}」的 ${hits.length} 个结果</h2></div>${rows}`;
 }
 
 /* =======================================================================
@@ -520,6 +572,7 @@ function renderPanel(){
   const q = hasQuiz(id);
   const best = bestRate(id);
   const vids = videoList(id);
+  const domUnsure = d.unsure;      // 存疑有时写在领域上（比如复数），技能级没有
 
   const pts = (s.pts || []).map(p => `<li>${p}</li>`).join('');
   const qTags = (s.q || []).map(x => `<span class="tag q">${x}题</span>`).join(' ') || '<span class="tag">不考</span>';
@@ -554,7 +607,7 @@ function renderPanel(){
 
     ${s.tip ? `<div class="p-sec">坑在哪</div><div class="tip">${s.tip}</div>` : ''}
 
-    ${s.unsure ? `<div class="unsure">⚠ ${s.unsure}</div>` : ''}
+    ${(s.unsure || domUnsure) ? `<div class="unsure">⚠ ${s.unsure || domUnsure}</div>` : ''}
 
     <div class="p-sec">怎么学 · 视频</div>
     ${vids.length ? vids.map(v => `
@@ -585,7 +638,7 @@ function renderPanel(){
             : `<button class="btn primary" data-act="toggle">点亮它（这课没配题）</button>`}
       <button class="btn" data-act="goal">设为目标</button>
     </div>
-    ${q ? `<div class="p-hint">${lit ? '已通过结业挑战' : `结业挑战要答对 80% 才能点亮${best ? ` · 你目前最好成绩 ${Math.round(best * 100)}%` : ''}`}</div>` : ''}
+    ${q ? `<div class="p-hint">${lit ? '已通过结业挑战' : `${quizRule(QUIZ[id].length)}才能点亮${best ? ` · 你目前最好成绩 ${Math.round(best * 100)}%` : ''}`}</div>` : ''}
     ${state.goal === id ? `<div style="font-size:11.5px;color:#7ed4a3;margin-top:6px">当前目标就是它</div>` : ''}
   `;
 }
@@ -621,6 +674,7 @@ function answerQuiz(oi){
 function nextQuestion(){
   const z = state.quiz;
   if (!z) return;
+  if (z.solo){ quitQuiz(); return; }        // 单题重做：答完直接回错题本，别跳下一题
   if (z.i < QUIZ[z.sid].length - 1){ z.i++; render(); return; }
   finishQuiz();
 }
@@ -663,7 +717,7 @@ function renderQuiz(){
           ? (z.missingPre && z.missingPre.length
               ? `题全对了，但前置还没点亮：${z.missingPre.map(m => byId[m].n).join('、')}。先把它们过了，这个技能才会亮。`
               : `过了。${s.n} 已经点亮。`)
-          : `差一点。这次要答对 ${Math.ceil(qs.length * QUIT_PASS)} / ${qs.length} 题（≥80%）才算过。没过不扣任何东西，错题已经进错题本了。`}</div>
+          : `差一点。${quizRule(qs.length)}才算过。没过不扣任何东西，错题已经进错题本了。`}</div>
         <div class="qr-actions">
           <button class="btn primary" data-quiz-retry>再来一次</button>
           ${state.wrong.length ? `<button class="btn" data-go="wrong">看错题本</button>` : ''}
@@ -768,7 +822,7 @@ function renderWrong(){
     </div>
     <div class="legend"><span>规则：答错的题 1 天后回来，答对一次往后推一档（3 天 → 7 天 → 15 天），走完全部四档就移出去</span></div>
     <div style="margin-bottom:16px">
-      <button class="btn primary" data-wrong-paper>把这份错题组成卷子打印（${list.length} 道选择）</button>
+      <button class="btn primary" data-wrong-paper>把错题组成卷子打印（${Math.min(list.length, 20)} 道${list.length > 20 ? '，一份最多 20' : ''}）</button>
     </div>
     <div class="wlist">${rows}</div>`;
 }
@@ -825,11 +879,7 @@ function playVideo(bv){
  *  15 选择 + 5 填空 + 4 解答，150 分 120 分钟，跟真卷结构一致，可打印存 PDF。
  *  卷子上会写明是自编题，不是原卷。
  * ======================================================================= */
-const PAPER_PLAN = [
-  { type: '选择', n: 15, each: 5 },
-  { type: '填空', n: 5, each: 5 },
-  { type: '解答', n: 4, each: 12 }
-];
+const PAPER_PLAN_DROPPED = true;   // 原来那套 15×5+5×5+4×12=148，和 150 对不上，已废弃
 
 /* 填空题和解答题题库：卷子上要凑齐三种题型，光靠四选一不够 */
 const PAPER_FILL = [
@@ -873,6 +923,13 @@ const PAPER_SOLVE = [
     a: '(1) z+w = 3+2i，z·w = 5+i。(2) |z| = √13，z̄ = 2−3i。',
     why: 'z·w = 2−2i+3i−3i² = 2+i+3 = 5+i。模是 √(4+9)。' }
 ];
+
+/* 填空/解答题里也有 < >（x² − x − 6 < 0），进 innerHTML 前先转义 */
+[PAPER_FILL, PAPER_SOLVE].forEach(arr => arr.forEach(q => {
+  q.q = escHtml(q.q);
+  q.a = escHtml(q.a);
+  q.why = escHtml(q.why);
+}));
 
 let paperCache = null;   // 同一份卷子重复打印时不要每次换题
 
@@ -951,7 +1008,7 @@ function renderPaper(){
       <h3>参考答案（自编题，不是官方答案）</h3>
       <div class="kgroup"><b>一、选择题</b><div>${p.choice.map((x, i) => `${i + 1}. ${'ABCD'[x.q.a]}`).join('　')}</div></div>
       ${p.fill.length ? `<div class="kgroup"><b>二、填空题</b><div>${p.fill.map((q, i) => `${off + 1 + i}. ${q.a}`).join('　｜　')}</div></div>` : ''}
-      ${p.solve.length ? `<div class="kgroup"><b>三、解答题</b>${p.solve.map((q, i) => `<div class="kitem"><b>${off + p.fill.length + 1 + i}.</b> ${escHtml(q.a)}<div class="kwhy">${escHtml(q.why)}</div></div>`).join('')}</div>` : ''}
+      ${p.solve.length ? `<div class="kgroup"><b>三、解答题</b>${p.solve.map((q, i) => `<div class="kitem"><b>${off + p.fill.length + 1 + i}.</b> ${q.a}<div class="kwhy">${q.why}</div></div>`).join('')}</div>` : ''}
       <div class="kgroup"><b>每题对应技能</b><div style="font-size:11.5px;color:#666">${p.choice.map((x, i) => `${i + 1}.${byId[x.sid].n}`).join('　')}</div></div>
     </div>`;
 
@@ -1054,6 +1111,11 @@ function renderStats(){
     ${untested.length ? `
       <div class="sec-title" style="margin-top:22px"><h2>还没碰过的</h2><span>${untested.length} 个领域</span></div>
       <div class="slist dim">${untested.map(rowHtml).join('')}</div>` : ''}
+
+    <div style="margin-top:32px;padding-top:16px;border-top:1px solid #1b2431">
+      <button class="btn" data-reset style="border-color:#5c2f28;color:#c9705f">清空这台设备上的所有进度</button>
+      <span style="font-size:11.5px;color:#5f7085;margin-left:10px">清空后没有撤销键，建议先点顶栏「导出」备份</span>
+    </div>
   `;
 }
 
@@ -1061,8 +1123,9 @@ function renderStats(){
  *  渲染总入口
  * ======================================================================= */
 function renderMain(){
-  if (state.view === 'quiz') return renderQuiz();
+  // 搜索优先：不然做题途中搜东西，主区一动不动（以前就是这个毛病）
   if (state.query.trim()) { renderSearch(); return; }
+  if (state.view === 'quiz') return renderQuiz();
   if (state.view === 'domain') return renderDomain(state.domainId);
   if (state.view === 'rank') return renderRank();
   if (state.view === 'plan') return renderPlan();
@@ -1073,6 +1136,7 @@ function renderMain(){
   return renderHome();
 }
 function render(){
+  if (sweepLitByScore()) save();
   document.body.classList.toggle('quiz-mode', state.view === 'quiz');
   document.body.classList.toggle('paper-mode', state.view === 'paper');
   renderMain();
@@ -1157,6 +1221,19 @@ document.getElementById('main').addEventListener('click', e => {
     render(); return;
   }
 
+  if (e.target.closest('[data-reset]')){
+    if (!confirm('要清空这台设备上的全部进度吗？\n（点亮、错题本、做题成绩、连续天数）')) return;
+    if (!confirm('再确认一次：清空之后没有撤销键。\n建议先点顶栏「导出」存一份。')) return;
+    state.lit = new Set();
+    state.wrong = [];
+    state.progress = {};
+    state.stats = {};
+    state.goal = null;
+    state.streak = { days: 0, last: null };
+    save(); render();
+    return;
+  }
+
   const qf = e.target.closest('[data-qf]');
   if (qf){
     state.qFilter = qf.dataset.qf || '';
@@ -1175,6 +1252,7 @@ document.getElementById('main').addEventListener('click', e => {
 });
 
 function goTo(view){
+  clearTimeout(searchTimer);      // 搜索的防抖定时器不掐掉，会把刚切的视图又盖回去
   state.view = view;
   state.query = '';
   document.getElementById('search').value = '';
@@ -1260,10 +1338,14 @@ document.getElementById('btn-rank').onclick = () => goTo('rank');
 document.getElementById('btn-wrong').onclick = () => goTo('wrong');
 document.getElementById('btn-papers').onclick = () => goTo('papers');
 document.getElementById('btn-stats').onclick = () => goTo('stats');
+document.getElementById('btn-plan').onclick = () => goTo('plan');
 
-/* 键盘：做题时 1~4 直接选，回车下一题 —— 手机上用不到，电脑上快很多 */
+/* 键盘：做题时 1~4 直接选，回车下一题 —— 手机上用不到，电脑上快很多。
+ * 焦点在输入框里时一律不接管，不然打「2」会直接选中 B。 */
 document.addEventListener('keydown', e => {
   if (state.view !== 'quiz') return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
   const z = state.quiz;
   if (!z || z.done) return;
   if (e.key >= '1' && e.key <= '4'){
@@ -1307,31 +1389,64 @@ document.getElementById('tgl-skip').addEventListener('change', e => {
 
 document.getElementById('btn-export').onclick = () => {
   const blob = new Blob([JSON.stringify({
+    v: 2,
     lit: [...state.lit], goal: state.goal,
-    wrong: state.wrong, progress: state.progress, streak: state.streak,
-    exportedAt: new Date().toISOString().slice(0, 10)
+    wrong: state.wrong, progress: state.progress,
+    stats: state.stats, streak: state.streak,
+    exportedAt: localDate(0)
   }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `广东3+证书数学技能树_进度_${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `广东3+证书数学技能树_进度_${localDate(0)}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 };
+
+/* 导入：以前是无条件覆盖，连 stats 都不带，换设备后「我的数据」会清零 */
+function applyImport(d, overwrite){
+  const litSet = new Set((d.lit || []).filter(x => byId[x]));
+  const wrongArr = (d.wrong || []).filter(w => byId[w.sid] && QUIZ[w.sid] && QUIZ[w.sid][w.qi]);
+  const prog = d.progress || {};
+  const stats = d.stats || {};
+
+  if (overwrite){
+    state.lit = litSet;
+    state.wrong = wrongArr;
+    state.progress = prog;
+    state.stats = stats;
+  } else {
+    litSet.forEach(x => state.lit.add(x));
+    wrongArr.forEach(w => {
+      if (!state.wrong.some(o => o.sid === w.sid && o.qi === w.qi)) state.wrong.push(w);
+    });
+    Object.entries(prog).forEach(([k, v]) => {
+      const cur = state.progress[k] || { tries: 0, best: 0 };
+      state.progress[k] = { tries: (cur.tries || 0) + (v.tries || 0), best: Math.max(cur.best || 0, v.best || 0) };
+    });
+    Object.entries(stats).forEach(([k, v]) => {
+      const cur = state.stats[k] || { right: 0, total: 0 };
+      state.stats[k] = { right: (cur.right || 0) + (v.right || 0), total: (cur.total || 0) + (v.total || 0) };
+    });
+  }
+  if (d.goal && byId[d.goal]) state.goal = d.goal;
+  if (d.streak && (d.streak.days || 0) > ((state.streak && state.streak.days) || 0)) state.streak = d.streak;
+}
 
 document.getElementById('import-file').addEventListener('change', e => {
   const f = e.target.files[0];
   if (!f) return;
   const r = new FileReader();
   r.onload = () => {
-    try{
-      const d = JSON.parse(r.result);
-      state.lit = new Set((d.lit || []).filter(x => byId[x]));
-      state.goal = d.goal && byId[d.goal] ? d.goal : null;
-      state.wrong = (d.wrong || []).filter(w => byId[w.sid] && QUIZ[w.sid] && QUIZ[w.sid][w.qi]);
-      state.progress = d.progress || {};
-      if (d.streak) state.streak = d.streak;
-      save(); render();
-    }catch(err){ alert('这个文件读不出来，确认是从这里导出的进度文件。'); }
+    let d;
+    try{ d = JSON.parse(r.result); }
+    catch(err){ alert('这个文件读不出来，确认是从这里导出的进度文件。'); return; }
+    const overwrite = confirm(
+      '导入会改动当前进度。\n\n' +
+      '点「确定」= 用文件里的记录覆盖这台设备\n' +
+      '点「取消」= 合并（点亮取并集、错题去重、成绩取高的）'
+    );
+    applyImport(d, overwrite);
+    save(); render();
   };
   r.readAsText(f);
   e.target.value = '';
@@ -1354,7 +1469,10 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   if (sel && byId[sel]) state.selected = sel;
   const goal = p.get('goal');
   if (goal && byId[goal]) state.goal = goal;
-  if (p.has('qf')) state.qFilter = p.get('qf');
+  if (p.has('qf')) {
+    const v = p.get('qf');
+    state.qFilter = ['选择', '填空', '解答'].includes(v) ? v : '';
+  }
   if (p.has('streak')) state.streak = { days: +p.get('streak'), last: localDate(0) };
   if (p.has('paperKey')) state.paperKey = true;
   if (p.get('paperMode') === 'wrong') state.paperMode = 'wrong';

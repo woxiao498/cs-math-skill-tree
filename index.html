@@ -7,7 +7,7 @@
 <style>
   :root{
     --bg:#0c1017; --bg2:#11161f; --panel:#141a24; --line:#232d3d;
-    --txt:#dfe6f0; --txt2:#93a3b8; --txt3:#5f7085;
+    --txt:#dfe6f0; --txt2:#93a3b8; --txt3:#7d92aa;
     --a:#e2604f; --b:#d69a3c; --c:#4f86c6; --d:#4a5566;
     --accent:#5b8fd6;
   }
@@ -203,7 +203,7 @@
 
   footer{
     padding:14px 24px 22px;border-top:1px solid var(--line);
-    font-size:11px;color:#4d5d72;line-height:1.9;background:#0a0e14;
+    font-size:11px;color:#6b7d92;line-height:1.9;background:#0a0e14;
   }
   footer a{color:#6a819c}
   .kbd{font-size:10.5px;padding:1px 5px;border:1px solid #2a3646;border-radius:4px;color:#8496ad}
@@ -238,6 +238,11 @@
     .pyear{flex:0 0 46px;font-size:17px}
     .qr-score{font-size:50px}
     .quiz-result{margin:26px auto}
+    /* 排行行：小屏时名字和领域一行，掌握标准和题型换到下一行，别把宽度挤爆 */
+    .rank-row{flex-wrap:wrap;row-gap:5px;align-items:center}
+    .rank-row .nm{min-width:0;flex:1 1 auto}
+    .rank-row .dom{min-width:0;font-size:10.5px}
+    .rank-row .how{flex:1 1 100%;white-space:normal;overflow:visible;text-overflow:clip;font-size:11px}
   }
 
   /* ---------- 打印练习卷 ---------- */
@@ -409,6 +414,7 @@
     <button class="btn" id="btn-wrong">错题本<span class="badge" id="wrong-badge"></span></button>
     <button class="btn" id="btn-papers">真题</button>
     <button class="btn" id="btn-stats">数据</button>
+    <button class="btn" id="btn-plan">清单</button>
     <button class="btn" id="btn-share">分享</button>
     <button class="btn" id="btn-export">导出</button>
     <label class="btn" for="import-file">导入</label>
