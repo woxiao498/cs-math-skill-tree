@@ -72,14 +72,31 @@ const state = {
   lit: new Set(),
   quiz: null,        // 正在答的：{ sid, i, answers: [] }
   wrong: [],         // 错题本：[{ sid, qi, stage, due, ts }]
-  progress: {}       // { sid: { tries, best } }
+  progress: {},      // { sid: { tries, best } }
+  streak: { days: 0, last: null }   // 连续学习天数：做过题才算
 };
+
+/* 本地日期，别用 toISOString（那是 UTC，凌晨八点前会算错一天） */
+function localDate(offsetDays){
+  const d = new Date(Date.now() + (offsetDays || 0) * 864e5);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/* 做了一道题，就算今天来过；昨天也来过就 +1，否则从 1 重新数 */
+function touchStreak(){
+  const today = localDate(0);
+  const s = state.streak || { days: 0, last: null };
+  if (s.last === today) return;
+  s.days = (s.last === localDate(-1)) ? (s.days || 0) + 1 : 1;
+  s.last = today;
+  state.streak = s;
+}
 
 function save(){
   try{
     localStorage.setItem(KEY, JSON.stringify({
       lit: [...state.lit], goal: state.goal, showSkippable: state.showSkippable,
-      wrong: state.wrong, progress: state.progress
+      wrong: state.wrong, progress: state.progress, streak: state.streak
     }));
   }catch(e){ /* file:// 下个别浏览器禁写，忽略，进度仍存在内存里 */ }
 }
@@ -93,6 +110,7 @@ function load(){
     state.showSkippable = !!d.showSkippable;
     state.wrong = (d.wrong || []).filter(w => byId[w.sid] && QUIZ[w.sid] && QUIZ[w.sid][w.qi]);
     state.progress = d.progress || {};
+    if (d.streak) state.streak = d.streak;
   }catch(e){}
 }
 
@@ -156,8 +174,10 @@ function renderProgress(){
   const done = vis.filter(s => state.lit.has(s.id)).length;
   const pct = vis.length ? Math.round(done / vis.length * 100) : 0;
   document.getElementById('pbar-fill').style.width = pct + '%';
+  const st = state.streak || {};
+  const streakTxt = st.days ? ` · 连续学习 ${st.days} 天` : '';
   document.getElementById('pbar-text').textContent =
-    `已点亮 ${done} / ${vis.length} 个技能 · ${pct}%`;
+    `已点亮 ${done} / ${vis.length} 个技能 · ${pct}%${streakTxt}`;
 }
 
 /* =======================================================================
@@ -543,6 +563,7 @@ function answerQuiz(oi){
   z.answers[z.i] = oi;
   const q = QUIZ[z.sid][z.i];
   scheduleWrong(z.sid, z.i, oi === q.a);
+  touchStreak();
   save();
   render();
 }
@@ -943,7 +964,7 @@ document.getElementById('tgl-skip').addEventListener('change', e => {
 document.getElementById('btn-export').onclick = () => {
   const blob = new Blob([JSON.stringify({
     lit: [...state.lit], goal: state.goal,
-    wrong: state.wrong, progress: state.progress,
+    wrong: state.wrong, progress: state.progress, streak: state.streak,
     exportedAt: new Date().toISOString().slice(0, 10)
   }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -964,6 +985,7 @@ document.getElementById('import-file').addEventListener('change', e => {
       state.goal = d.goal && byId[d.goal] ? d.goal : null;
       state.wrong = (d.wrong || []).filter(w => byId[w.sid] && QUIZ[w.sid] && QUIZ[w.sid][w.qi]);
       state.progress = d.progress || {};
+      if (d.streak) state.streak = d.streak;
       save(); render();
     }catch(err){ alert('这个文件读不出来，确认是从这里导出的进度文件。'); }
   };
@@ -989,6 +1011,7 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   const goal = p.get('goal');
   if (goal && byId[goal]) state.goal = goal;
   if (p.has('qf')) state.qFilter = p.get('qf');
+  if (p.has('streak')) state.streak = { days: +p.get('streak'), last: localDate(0) };
   // ?quiz=s3&qi=0&pick=1 —— 直接看刷题页，pick 预填一个已选答案
   const qz = p.get('quiz');
   if (qz && hasQuiz(qz)){
