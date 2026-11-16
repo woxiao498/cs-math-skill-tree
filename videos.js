@@ -86,7 +86,7 @@ const SKILL_VIDEO = {
   // 预备
   p1: ['BV1Xx4y1n7ZQ'],
   p2: ['BV15z421h7XH'],
-  p4: ['BV1WK411w726'],
+  // p4 韦达定理没有单独讲得对的一集，故意不配，走 prep 领域兜底
 
   // 集合
   s1: ['BV1kVQRBXEAd'],

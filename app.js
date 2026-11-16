@@ -127,6 +127,7 @@ const state = {
   wrong: [],         // 错题本：[{ sid, qi, stage, due, ts }]
   progress: {},      // { sid: { tries, best } }
   stats: {},         // { sid: { right, total } } 用来算各领域正确率
+  unlitSet: new Set(), // 用户手动取消过点亮的技能，sweep 不许再自动加回去
   paperKey: false,   // 练习卷是否显示答案
   paperMode: 'normal', // normal = 随机整卷；wrong = 错题卷
   streak: { days: 0, last: null }   // 连续学习天数：做过题才算
@@ -152,7 +153,8 @@ function save(){
   try{
     localStorage.setItem(KEY, JSON.stringify({
       lit: [...state.lit], goal: state.goal, showSkippable: state.showSkippable,
-      wrong: state.wrong, progress: state.progress, streak: state.streak, stats: state.stats
+      wrong: state.wrong, progress: state.progress, streak: state.streak, stats: state.stats,
+      unlit: [...state.unlitSet]
     }));
   }catch(e){ /* file:// 下个别浏览器禁写，忽略，进度仍存在内存里 */ }
 }
@@ -167,6 +169,7 @@ function load(){
     state.wrong = (d.wrong || []).filter(w => byId[w.sid] && QUIZ[w.sid] && QUIZ[w.sid][w.qi]);
     state.progress = d.progress || {};
     state.stats = d.stats || {};
+    state.unlitSet = new Set((d.unlit || []).filter(x => byId[x]));
     if (d.streak) state.streak = d.streak;
   }catch(e){}
 }
@@ -202,14 +205,17 @@ function quizRule(n){
 }
 
 /* 当时做对了但前置没齐，后来前置补齐了 —— 不该让学生再考一遍。
- * 每次渲染前扫一遍：成绩够格 + 前置齐 = 直接点亮。 */
+ * 但有两件事必须挡住，否则会吃掉「取消点亮」：
+ *   1. 用户手动取消过的（unlitSet），不许自动加回来
+ *   2. 成绩要按「当前题量」算，题库从 2 题变 5 题后，旧的 2/2 不能算数 */
 function sweepLitByScore(){
   let changed = true, dirty = false;
   while (changed){
     changed = false;
     for (const sid of Object.keys(state.progress)){
-      if (state.lit.has(sid) || !byId[sid]) continue;
+      if (state.lit.has(sid) || !byId[sid] || state.unlitSet.has(sid)) continue;
       if ((state.progress[sid].best || 0) < QUIT_PASS) continue;
+      if ((state.progress[sid].n || 0) !== QUIZ[sid].length) continue;   // 题量变了就重做
       if (hardPre(sid).every(x => state.lit.has(x))){
         state.lit.add(sid);
         changed = true; dirty = true;
@@ -282,7 +288,9 @@ function renderHome(){
       <div class="dom-card" data-dom="${d.id}" style="--dc:${d.color}">
         <h3>${d.name}</h3>
         <div class="meta">
-          <span class="rank-badge lv-${d.lv}">${d.lv}</span>
+          ${d.id === 'prep'
+            ? '<span class="rank-badge" style="background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d;white-space:nowrap">地基</span>'
+            : `<span class="rank-badge lv-${d.lv}">${d.lv}</span>`}
           <span>${d.score}</span>
         </div>
         <div class="desc">${d.desc}</div>
@@ -457,7 +465,9 @@ function renderRank(){
     const d = domById[s.d];
     const q = (s.q || []).length ? s.q.map(x => `<span class="tag q">${x}</span>`).join(' ') : '<span class="tag">不考</span>';
     return `<div class="rank-row" data-skill="${s.id}">
-      <span class="rank-badge lv-${s.lv}">${s.lv}</span>
+      ${s.d === 'prep'
+        ? `<span class="rank-badge" style="background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d;white-space:nowrap">基</span>`
+        : `<span class="rank-badge lv-${s.lv}">${s.lv}</span>`}
       <span class="nm">${s.n}</span>
       <span class="dom" style="color:${d.color}88">${d.short}</span>
       <span class="how">${s.how}</span>
@@ -594,8 +604,11 @@ function renderPanel(){
     <div class="p-head">${s.n}</div>
     <div class="p-domain" style="color:${d.color}">${d.name} · 第 ${stepOf(id)} 步</div>
     <div class="p-row">
-      <span class="rank-badge lv-${s.lv}">${s.lv}</span>
-      <span style="font-size:11.5px;color:#93a3b8">${({A:'主力，必考',B:'常考',C:'边缘',D:'可跳过'})[s.lv]}</span>
+      ${s.d === 'prep'
+        ? `<span class="rank-badge" style="background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d;white-space:nowrap">地基</span>
+           <span style="font-size:11.5px;color:#8fa8c4">不出独立考题，但必须会</span>`
+        : `<span class="rank-badge lv-${s.lv}">${s.lv}</span>
+           <span style="font-size:11.5px;color:#93a3b8">${({A:'主力，必考',B:'常考',C:'边缘',D:'可跳过'})[s.lv]}</span>`}
       ${qTags}
     </div>
 
@@ -688,9 +701,13 @@ function finishQuiz(){
   const p = state.progress[z.sid] || { tries: 0, best: 0 };
   p.tries += 1;
   p.best = Math.max(p.best, rate);
+  p.n = qs.length;            // 记下这次是按几道题考出来的，题量变了旧成绩就不算
   // 过线了也要前置齐才点亮 —— 题会做，不代表这条链上的东西都会
   z.missingPre = hardPre(z.sid).filter(x => !state.lit.has(x));
-  if (rate >= QUIT_PASS && z.missingPre.length === 0) state.lit.add(z.sid);
+  if (rate >= QUIT_PASS && z.missingPre.length === 0){
+    state.lit.add(z.sid);
+    state.unlitSet.delete(z.sid);   // 重新考过了，之前的手动取消作废
+  }
   state.progress[z.sid] = p;
   z.done = true;
   z.rate = rate;
@@ -954,16 +971,11 @@ function buildPaper(mode){
     [sids[i], sids[j]] = [sids[j], sids[i]];
   }
   const picks = [];
-  let k = 0;
-  while (picks.length < 15){
-    let added = false;
-    for (const sid of sids){
-      if (picks.length >= 15) break;
-      const pool = bySid[sid];
-      if (k < pool.length){ picks.push(pool[k]); added = true; }
-    }
-    if (!added) break;
-    k++;
+  for (const sid of sids){
+    if (picks.length >= 15) break;
+    const pool = bySid[sid];
+    // 每个技能随机抽一道，不能老抽第 0 道，不然新补的题永远进不了卷子
+    picks.push(pool[Math.floor(Math.random() * pool.length)]);
   }
 
   const pickN = (arr, n) => {
@@ -1305,8 +1317,10 @@ document.getElementById('panel').addEventListener('click', e => {
       if (extra.length){
         setTimeout(() => alert(`已经连同 ${extra.length} 个下游技能一起收回了：\n${extra.map(x => byId[x].n).join('、')}`), 30);
       }
+      state.unlitSet.add(id);   // 记下来，不然 sweep 下次渲染又自动点亮回去
     } else if (isUnlocked(id)) {
       state.lit.add(id);
+      state.unlitSet.delete(id);
     }
     save(); render();
   }
@@ -1393,6 +1407,7 @@ document.getElementById('btn-export').onclick = () => {
     lit: [...state.lit], goal: state.goal,
     wrong: state.wrong, progress: state.progress,
     stats: state.stats, streak: state.streak,
+    unlit: [...state.unlitSet],
     exportedAt: localDate(0)
   }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -1414,8 +1429,10 @@ function applyImport(d, overwrite){
     state.wrong = wrongArr;
     state.progress = prog;
     state.stats = stats;
+    state.unlitSet = new Set((d.unlit || []).filter(x => byId[x]));
   } else {
     litSet.forEach(x => state.lit.add(x));
+    (d.unlit || []).filter(x => byId[x]).forEach(x => state.unlitSet.add(x));
     wrongArr.forEach(w => {
       if (!state.wrong.some(o => o.sid === w.sid && o.qi === w.qi)) state.wrong.push(w);
     });
@@ -1440,13 +1457,13 @@ document.getElementById('import-file').addEventListener('change', e => {
     let d;
     try{ d = JSON.parse(r.result); }
     catch(err){ alert('这个文件读不出来，确认是从这里导出的进度文件。'); return; }
-    const overwrite = confirm(
-      '导入会改动当前进度。\n\n' +
-      '点「确定」= 用文件里的记录覆盖这台设备\n' +
-      '点「取消」= 合并（点亮取并集、错题去重、成绩取高的）'
-    );
-    applyImport(d, overwrite);
-    save(); render();
+    if (confirm('导入进度。\n\n「确定」= 用文件里的记录覆盖这台设备\n「取消」= 下一步再选')){
+      applyImport(d, true);
+      save(); render();
+    } else if (confirm('要合并进去吗？\n\n「确定」= 合并（点亮取并集、错题去重、成绩取高的）\n「取消」= 什么都不做')){
+      applyImport(d, false);
+      save(); render();
+    }
   };
   r.readAsText(f);
   e.target.value = '';
