@@ -196,6 +196,16 @@ function renderHome(){
       <h2>${DOMAINS.length} 个领域</h2>
       <span>从地基排到末题，不是按教材章节顺序</span>
     </div>
+    <div class="startbar">
+      <div class="sbtxt">
+        <b>不知道从哪开始？</b>先点开「集合与逻辑用语」学交集并集 —— 卷面第 1 题基本固定考它，五分钟能上手。<br>
+        想先摸摸底也行：直接做题不拦你，答错不扣分，只有前置都点亮了才算真点亮。
+      </div>
+      <div class="sbbtns">
+        <button class="btn mini" data-dom="set">去看集合</button>
+        <button class="btn mini primary" data-start="s3">直接做这一课</button>
+      </div>
+    </div>
     <div class="dom-grid">${cards}</div>
     <div style="margin-top:26px;font-size:12px;color:#5f7085;line-height:1.9">
       卡上的 <b style="color:#93a3b8">A/B/C/D</b> 是这块在往年卷面里的分量，不是教材要求。<br>
@@ -519,11 +529,7 @@ function renderPanel(){
  * ======================================================================= */
 function startQuiz(sid){
   if (!hasQuiz(sid)) return;
-  const s = byId[sid];
-  if (!isUnlocked(sid)){
-    alert(`前置还没点亮：${missingPre(sid).map(m => byId[m].n).join('、')}`);
-    return;
-  }
+  // 不拦前置：先做题找感觉，点亮另算（点亮时才要求前置齐）
   state.quiz = { sid, i: 0, answers: new Array(QUIZ[sid].length).fill(null), done: false };
   state.view = 'quiz';
   state.selected = sid;
@@ -556,7 +562,9 @@ function finishQuiz(){
   const p = state.progress[z.sid] || { tries: 0, best: 0 };
   p.tries += 1;
   p.best = Math.max(p.best, rate);
-  if (rate >= QUIT_PASS) state.lit.add(z.sid);
+  // 过线了也要前置齐才点亮 —— 题会做，不代表这条链上的东西都会
+  z.missingPre = hardPre(z.sid).filter(x => !state.lit.has(x));
+  if (rate >= QUIT_PASS && z.missingPre.length === 0) state.lit.add(z.sid);
   state.progress[z.sid] = p;
   z.done = true;
   z.rate = rate;
@@ -580,7 +588,9 @@ function renderQuiz(){
         <div class="qr-score ${pass ? 'ok' : 'no'}">${Math.round(z.rate * 100)}%</div>
         <div class="qr-line">答对 ${z.right} / ${qs.length} 题</div>
         <div class="qr-msg">${pass
-          ? `过了。${s.n} 已经点亮。`
+          ? (z.missingPre && z.missingPre.length
+              ? `题全对了，但前置还没点亮：${z.missingPre.map(m => byId[m].n).join('、')}。先把它们过了，这个技能才会亮。`
+              : `过了。${s.n} 已经点亮。`)
           : `差一点。这次要答对 ${Math.ceil(qs.length * QUIT_PASS)} / ${qs.length} 题（≥80%）才算过。没过不扣任何东西，错题已经进错题本了。`}</div>
         <div class="qr-actions">
           <button class="btn primary" data-quiz-retry>再来一次</button>
@@ -786,6 +796,9 @@ document.getElementById('main').addEventListener('click', e => {
   }
   const play = e.target.closest('[data-play]');
   if (play){ playVideo(play.dataset.play); return; }
+
+  const st = e.target.closest('[data-start]');
+  if (st){ startQuiz(st.dataset.start); return; }
 
   const opt = e.target.closest('[data-quiz-opt]');
   if (opt){ answerQuiz(+opt.dataset.quizOpt); return; }
