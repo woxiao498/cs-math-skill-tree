@@ -240,6 +240,36 @@
     .quiz-result{margin:26px auto}
   }
 
+  /* ---------- 打印练习卷 ---------- */
+  .paper{background:#fff;color:#1a1a1a;border-radius:8px;padding:30px 34px;line-height:1.7;
+    font-family:"Songti SC","SimSun","Microsoft YaHei",serif}
+  .paper .phead h2{margin:0 0 7px;font-size:19px;font-weight:700;letter-spacing:.5px}
+  .paper .pmeta{display:flex;gap:18px;font-size:12px;color:#555;flex-wrap:wrap}
+  .paper .pnote{font-size:11.5px;color:#555;background:#f4f4f4;border-left:3px solid #999;
+    padding:8px 11px;margin:12px 0 20px;line-height:1.7}
+  .paper .psec{font-size:14px;font-weight:700;margin:24px 0 11px;padding-bottom:6px;border-bottom:1px solid #ddd}
+  .paper .pq{margin-bottom:13px}
+  .paper .qt{font-size:13.5px;line-height:1.75}
+  .paper .po{display:flex;flex-wrap:wrap;gap:5px 24px;margin:5px 0 0 20px;font-size:13px;color:#222}
+  .paper .pspace{height:92px}
+  .paper .pkey{margin-top:34px;padding-top:18px;border-top:2px dashed #bbb}
+  .paper .pkey h3{font-size:14px;margin:0 0 12px}
+  .paper .kgroup{margin-bottom:15px;font-size:12.5px;line-height:1.85}
+  .paper .kgroup>b{display:block;margin-bottom:4px}
+  .paper .kitem{margin:8px 0;font-size:12.5px}
+  .paper .kwhy{color:#666;font-size:11.5px;margin-top:3px}
+
+  @media print{
+    .topbar,.progressbar,aside#panel,footer,.noprint{display:none!important}
+    html,body{background:#fff!important}
+    .layout{display:block!important}
+    main{padding:0!important;overflow:visible!important;max-width:none!important;width:auto!important}
+    .paper{padding:0;border-radius:0}
+    .paper .pq{page-break-inside:avoid}
+    .paper .pkey{page-break-before:always}
+    @page{margin:14mm 12mm}
+  }
+
   /* ---------- 数据页 ---------- */
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
   .kpi{background:#111823;border:1px solid #22303f;border-radius:10px;padding:14px 12px;text-align:center}
@@ -279,6 +309,9 @@
   /* ---------- 刷题时全宽 ---------- */
   body.quiz-mode aside#panel{display:none}
   body.quiz-mode .layout > main{max-width:880px;width:100%;margin:0 auto}
+  /* 打印卷子也要全宽，右侧面板没用 */
+  body.paper-mode aside#panel{display:none}
+  body.paper-mode .layout > main{max-width:900px;width:100%;margin:0 auto}
 
   /* ---------- 顶栏角标 ---------- */
   .badge{display:inline-block;min-width:15px;height:15px;line-height:15px;margin-left:5px;

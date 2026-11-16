@@ -116,6 +116,7 @@ const state = {
   wrong: [],         // 错题本：[{ sid, qi, stage, due, ts }]
   progress: {},      // { sid: { tries, best } }
   stats: {},         // { sid: { right, total } } 用来算各领域正确率
+  paperKey: false,   // 练习卷是否显示答案
   streak: { days: 0, last: null }   // 连续学习天数：做过题才算
 };
 
@@ -792,7 +793,11 @@ function renderPapers(){
   main.innerHTML = `
     <div class="crumbs"><a data-go="home">领域总览</a> / <span>真题</span></div>
     <div class="sec-title"><h2>历年真题讲解</h2><span>先看老师怎么拆整张卷子，再回头补自己缺的那块</span></div>
-    <div class="legend"><span>这里只放 B站 上的公开讲解视频，题目本身我没拿到原卷，页面上不摆「真题」。想自己刷，看完视频去搜当年原卷。</span></div>
+    <div class="legend" style="margin-bottom:14px"><span>这里只放 B站 上的公开讲解视频，题目本身我没拿到原卷，页面上不摆「真题」。想自己刷，看完视频去搜当年原卷。</span></div>
+    <div class="advice" style="margin-bottom:16px">
+      想打印一份整套的卷子来做？<b>生成一张 150 分的练习卷</b> —— 15 选择 + 5 填空 + 4 解答，结构和真卷一致，可打印或存成 PDF（题目是自编的）。
+      <div style="margin-top:9px"><button class="btn mini primary" data-go="paper">生成练习卷</button></div>
+    </div>
     <div class="plist">${rows}</div>
     <div id="player-slot"></div>`;
 }
@@ -811,8 +816,160 @@ function playVideo(bv){
 }
 
 /* =======================================================================
- *  数据：哪块最该补
+ *  打印练习卷
+ *  没有真题原卷（没文件、有版权），所以这里用题库拼一份「同一张卷子」：
+ *  15 选择 + 5 填空 + 4 解答，150 分 120 分钟，跟真卷结构一致，可打印存 PDF。
+ *  卷子上会写明是自编题，不是原卷。
  * ======================================================================= */
+const PAPER_PLAN = [
+  { type: '选择', n: 15, each: 5 },
+  { type: '填空', n: 5, each: 5 },
+  { type: '解答', n: 4, each: 12 }
+];
+
+/* 填空题和解答题题库：卷子上要凑齐三种题型，光靠四选一不够 */
+const PAPER_FILL = [
+  { q: '计算：8^(2/3) = ______', a: '4', why: '先开三次方 8^(1/3)=2，再平方得 4。' },
+  { q: '函数 f(x) = √(x − 3) 的定义域是 ______', a: '[3, +∞)', why: '根号下非负，x−3 ≥ 0。' },
+  { q: '已知等差数列 a₁ = 3，公差 d = 4，则 a₇ = ______', a: '27', why: 'a₇ = 3 + 6×4 = 27，注意是 6 个间隔。' },
+  { q: '已知 sinα = 4/5，α 是第一象限角，则 cosα = ______', a: '3/5', why: 'cos²α = 1−16/25 = 9/25，第一象限取正。' },
+  { q: '若向量 a = (2, −1)，b = (1, 3)，则 a·b = ______', a: '−1', why: '2×1 + (−1)×3 = −1。' },
+  { q: '过点 (2, 1) 且斜率为 −1 的直线方程是 ______', a: 'x + y − 3 = 0', why: 'y−1 = −(x−2)，整理得 x+y−3=0。' },
+  { q: '圆 x² + y² − 2x + 4y = 0 的半径是 ______', a: '√5', why: '(x−1)² + (y+2)² = 5，半径 √5。' },
+  { q: '从 5 个人里选 2 个人去开会，共有 ______ 种选法', a: '10', why: '不排顺序，C(5,2) = 10。' },
+  { q: '数据 3, 5, 7, 9 的平均数是 ______', a: '6', why: '(3+5+7+9)/4 = 6。' },
+  { q: '复数 (2 + i)(1 − i) = ______', a: '3 − i', why: '2−2i+i−i² = 3−i。' },
+  { q: '抛物线 y² = 4x 的准线方程是 ______', a: 'x = −1', why: '2p = 4，p = 2，准线 x = −p/2 = −1。' },
+  { q: '不等式 x² − x − 6 < 0 的解集是 ______', a: '−2 < x < 3', why: '(x−3)(x+2) < 0，取两根之间。' }
+];
+
+const PAPER_SOLVE = [
+  { q: '已知二次函数 y = x² − 4x + 5。(1) 求它的对称轴和顶点坐标；(2) 求它在区间 [0, 3] 上的最大值和最小值。',
+    a: '(1) 对称轴 x = 2，顶点 (2, 1)。(2) 最小值 1（在 x=2 处），最大值 5（在 x=0 处；f(3)=2，f(0)=5，取 5）。',
+    why: '配方 y=(x−2)²+1 直接读顶点。闭区间最值要比较顶点和两个端点。' },
+  { q: '在 △ABC 中，a = 4，b = 6，C = 60°。(1) 求边 c；(2) 求三角形的面积。',
+    a: '(1) c = 2√7（c² = 16+36−24 = 28）。(2) S = 6√3（½×4×6×sin60° = 12×√3/2）。',
+    why: '已知两边夹角直接上余弦定理；面积用 ½ab·sinC。' },
+  { q: '已知等差数列 {aₙ} 中，a₁ = 2，a₄ = 11。(1) 求公差 d 和通项公式；(2) 求前 10 项和 S₁₀。',
+    a: '(1) d = 3，aₙ = 3n − 1。(2) S₁₀ = 155。',
+    why: 'a₄ = a₁+3d → 11 = 2+3d → d=3。S₁₀ = 10×2 + 10×9/2×3 = 20+135 = 155。' },
+  { q: '某厂第一年产量 100 万件，以后每年比上一年增长 10%。(1) 写出第 n 年产量 aₙ 的表达式；(2) 第几年产量首次超过 130 万件？（可估算）',
+    a: '(1) aₙ = 100×1.1^(n−1)。(2) 第 4 年：100×1.1³ = 133.1 > 130（第 3 年是 121）。',
+    why: '每年乘固定比例是等比数列。判断大小可以逐年代入，不必解对数不等式。' },
+  { q: '已知椭圆 x²/25 + y²/16 = 1。(1) 求 a、b、c 和焦点坐标；(2) 求离心率。',
+    a: '(1) a=5，b=4，c=3，焦点 (±3, 0)。(2) e = 3/5。',
+    why: 'c² = a²−b² = 25−16 = 9。焦点在分母大的那个字母所在的轴上。' },
+  { q: '已知圆的方程为 x² + y² − 4x + 2y − 4 = 0。(1) 求圆心和半径；(2) 判断直线 x + y − 1 = 0 与圆的位置关系。',
+    a: '(1) 圆心 (2, −1)，半径 3。(2) d = |2−1−1|/√2 = 0 < 3，相交。',
+    why: '配方得 (x−2)²+(y+1)²=9。直线过圆心，所以是相交（且是直径）。' },
+  { q: '袋中有 3 个红球、2 个白球，共 5 个球。(1) 任取 1 个，求取到红球的概率；(2) 任取 2 个，求两个都是红球的概率。',
+    a: '(1) 3/5。(2) C(3,2)/C(5,2) = 3/10。',
+    why: '第二问是不放回抽样，用组合数算：分子 3 个红球里取 2，分母 5 个球里取 2。' },
+  { q: '已知复数 z = 2 + 3i，w = 1 − i。(1) 求 z + w 和 z·w；(2) 求 |z| 和 z 的共轭复数。',
+    a: '(1) z+w = 3+2i，z·w = 5+i。(2) |z| = √13，z̄ = 2−3i。',
+    why: 'z·w = 2−2i+3i−3i² = 2+i+3 = 5+i。模是 √(4+9)。' }
+];
+
+let paperCache = null;   // 同一份卷子重复打印时不要每次换题
+
+function buildPaper(){
+  const all = [];
+  Object.entries(QUIZ).forEach(([sid, arr]) => arr.forEach((q, i) => all.push({ sid, i, q })));
+  // 先按技能打散，保证 15 道题尽量来自不同技能
+  const bySid = {};
+  all.forEach(x => { (bySid[x.sid] = bySid[x.sid] || []).push(x); });
+  const sids = Object.keys(bySid);
+  for (let i = sids.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [sids[i], sids[j]] = [sids[j], sids[i]];
+  }
+  const picks = [];
+  let k = 0;
+  while (picks.length < 15){
+    let added = false;
+    for (const sid of sids){
+      if (picks.length >= 15) break;
+      const pool = bySid[sid];
+      if (k < pool.length){ picks.push(pool[k]); added = true; }
+    }
+    if (!added) break;
+    k++;
+  }
+
+  const pickN = (arr, n) => {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a.slice(0, n);
+  };
+
+  return {
+    choice: picks,
+    fill: pickN(PAPER_FILL, 5),
+    solve: pickN(PAPER_SOLVE, 4),
+    stamp: localDate(0)
+  };
+}
+
+function renderPaper(){
+  if (!paperCache) paperCache = buildPaper();
+  const p = paperCache;
+  const showKey = !!state.paperKey;
+  const main = document.getElementById('main');
+
+  let no = 0;
+  const choiceHtml = p.choice.map(x => {
+    no++;
+    const q = x.q;
+    return `<div class="pq"><div class="qt">${no}. ${q.q}</div>
+      <div class="po">${['A','B','C','D'].map((L, i) => `<span>${L}. ${q.o[i]}</span>`).join('')}</div></div>`;
+  }).join('');
+
+  const fillHtml = p.fill.map((q, i) => `<div class="pq"><div class="qt">${16 + i}. ${q.q}</div></div>`).join('');
+  const solveHtml = p.solve.map((q, i) => `<div class="pq"><div class="qt">${21 + i}. ${q.q}</div><div class="pspace"></div></div>`).join('');
+
+  const keyHtml = `
+    <div class="pkey">
+      <h3>参考答案（自编题，不是官方答案）</h3>
+      <div class="kgroup"><b>一、选择题</b><div>${p.choice.map((x, i) => `${i + 1}. ${'ABCD'[x.q.a]}`).join('　')}</div></div>
+      <div class="kgroup"><b>二、填空题</b><div>${p.fill.map((q, i) => `${16 + i}. ${q.a}`).join('　｜　')}</div></div>
+      <div class="kgroup"><b>三、解答题</b>${p.solve.map((q, i) => `<div class="kitem"><b>${21 + i}.</b> ${escHtml(q.a)}<div class="kwhy">${escHtml(q.why)}</div></div>`).join('')}</div>
+      <div class="kgroup"><b>选择题对应技能</b><div style="font-size:11.5px;color:#666">${p.choice.map((x, i) => `${i + 1}.${byId[x.sid].n}`).join('　')}</div></div>
+    </div>`;
+
+  main.innerHTML = `
+    <div class="crumbs noprint"><a data-go="home">领域总览</a> / <span>打印练习卷</span></div>
+    <div class="noprint" style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px">
+      <button class="btn primary" data-paper-print>打印 / 存成 PDF</button>
+      <button class="btn" data-paper-toggle>${showKey ? '只看卷子' : '显示答案'}</button>
+      <button class="btn" data-paper-new>换一张卷子</button>
+    </div>
+    <div class="noprint" style="font-size:12px;color:#7d92aa;line-height:1.75;margin-bottom:18px">
+      15 选择 + 5 填空 + 4 解答，共 150 分、120 分钟，结构和真卷一致。<br>
+      <b style="color:#b9a06a">题目是自编的，不是历年原卷</b> —— 真题原卷我没有，也不适合转存到公开仓库。想要原卷得去学科网那类地方找。<br>
+      打印时可以选「另存为 PDF」，手机上用浏览器分享 → 打印也行。
+    </div>
+
+    <div class="paper">
+      <div class="phead">
+        <h2>广东省 3+证书（高职高考）数学 · 练习卷</h2>
+        <div class="pmeta">
+          <span>考试时间 120 分钟</span><span>满分 150 分</span><span>生成于 ${p.stamp}</span>
+        </div>
+        <div class="pnote">本卷为自编练习题，非官方真题。一、选择题 15 小题每题 5 分共 75 分；二、填空题 5 小题每题 5 分共 25 分；三、解答题 4 小题共 50 分。</div>
+      </div>
+      <div class="psec">一、选择题（每小题 5 分，共 75 分）</div>
+      ${choiceHtml}
+      <div class="psec">二、填空题（每小题 5 分，共 25 分）</div>
+      ${fillHtml}
+      <div class="psec">三、解答题（共 50 分）</div>
+      ${solveHtml}
+      ${showKey ? keyHtml : ''}
+    </div>
+  `;
+}
 function renderStats(){
   const main = document.getElementById('main');
   const byDom = {};
@@ -891,11 +1048,13 @@ function renderMain(){
   if (state.view === 'plan') return renderPlan();
   if (state.view === 'wrong') return renderWrong();
   if (state.view === 'papers') return renderPapers();
+  if (state.view === 'paper') return renderPaper();
   if (state.view === 'stats') return renderStats();
   return renderHome();
 }
 function render(){
   document.body.classList.toggle('quiz-mode', state.view === 'quiz');
+  document.body.classList.toggle('paper-mode', state.view === 'paper');
   renderMain();
   renderPanel();
   renderProgress();
@@ -920,6 +1079,7 @@ function syncHash(){
     else if (state.view === 'plan') h = '#plan';
     else if (state.view === 'wrong') h = '#wrong';
     else if (state.view === 'papers') h = '#papers';
+    else if (state.view === 'paper') h = '#paper';
     else if (state.view === 'stats') h = '#stats';
   }
   if (location.hash === h) return;
@@ -941,6 +1101,10 @@ document.getElementById('main').addEventListener('click', e => {
 
   const st = e.target.closest('[data-start]');
   if (st){ startQuiz(st.dataset.start); return; }
+
+  if (e.target.closest('[data-paper-print]')){ window.print(); return; }
+  if (e.target.closest('[data-paper-toggle]')){ state.paperKey = !state.paperKey; render(); return; }
+  if (e.target.closest('[data-paper-new]')){ paperCache = null; render(); return; }
 
   const opt = e.target.closest('[data-quiz-opt]');
   if (opt){ answerQuiz(+opt.dataset.quizOpt); return; }
@@ -1153,6 +1317,7 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   if (goal && byId[goal]) state.goal = goal;
   if (p.has('qf')) state.qFilter = p.get('qf');
   if (p.has('streak')) state.streak = { days: +p.get('streak'), last: localDate(0) };
+  if (p.has('paperKey')) state.paperKey = true;
   // ?demoStats=1 —— 造点做题记录，方便看数据页
   if (p.has('demoStats')){
     const demo = { s3: [3, 3], i3: [2, 3], t9: [1, 3], g8: [2, 2], r6: [1, 2], q2: [2, 2] };
@@ -1196,6 +1361,7 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   if (h === 'plan') { state.view = 'plan'; return; }
   if (h === 'wrong') { state.view = 'wrong'; return; }
   if (h === 'papers') { state.view = 'papers'; return; }
+  if (h === 'paper') { state.view = 'paper'; return; }
   if (h === 'stats') { state.view = 'stats'; return; }
 })();
 
