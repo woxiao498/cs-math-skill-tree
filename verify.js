@@ -1,6 +1,6 @@
-/* 数据自检：改完 data.js / soft-pre.js 跑一遍
+/* 数据自检：改完 data.js / soft-pre.js / quiz.js / videos.js 跑一遍
  *   node verify.js
- * 检查：id 唯一、前置存在、无环、步数可算、题型合法、软前置归属
+ * 检查：id 唯一、前置存在、无环、步数可算、题型合法、题库格式、视频引用
  */
 const fs = require('fs');
 const vm = require('vm');
@@ -8,11 +8,11 @@ const path = require('path');
 
 const dir = __dirname;
 const ctx = vm.createContext({ console });
-for (const f of ['data.js', 'soft-pre.js']) {
+for (const f of ['data.js', 'soft-pre.js', 'quiz.js', 'videos.js']) {
   vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx, { filename: f });
 }
-vm.runInContext('globalThis.__D = { EXAM, DOMAINS, SKILLS, SOFT_PRE }', ctx);
-const { EXAM, DOMAINS, SKILLS, SOFT_PRE } = ctx.__D;
+vm.runInContext('globalThis.__D = { EXAM, DOMAINS, SKILLS, SOFT_PRE, QUIZ, VIDEO_INFO, DOMAIN_VIDEO, SKILL_VIDEO, PAPERS }', ctx);
+const { EXAM, DOMAINS, SKILLS, SOFT_PRE, QUIZ, VIDEO_INFO, DOMAIN_VIDEO, SKILL_VIDEO, PAPERS } = ctx.__D;
 
 let bad = 0;
 const fail = (m) => { console.error('  ✗ ' + m); bad++; };
@@ -77,12 +77,44 @@ function step(id) {
 }
 SKILLS.forEach(s => step(s.id));
 
-// 8. 前置的步数必须严格小于自身（否则"步"不是拓扑序）
+// 8. 前置的步数必须严格小于自身
 for (const s of SKILLS) {
   for (const p of hardPre(s.id)) {
     if (memo[p] >= memo[s.id]) fail(`${s.id} 的硬前置 ${p} 步数 ${memo[p]} 不小于自身 ${memo[s.id]}`);
   }
 }
+
+// 9. 题库
+let qTotal = 0;
+const covered = new Set();
+for (const [k, arr] of Object.entries(QUIZ)) {
+  if (!byId[k]) { fail(`题库里的 ${k} 不是有效技能`); continue; }
+  covered.add(k);
+  if (!Array.isArray(arr) || !arr.length) { fail(`${k} 空题组`); continue; }
+  arr.forEach((q, i) => {
+    qTotal++;
+    const tag = `${k}[${i}]`;
+    if (!q.q) fail(`${tag} 缺题干`);
+    if (!Array.isArray(q.o) || q.o.length !== 4) fail(`${tag} 选项不是 4 个`);
+    if (new Set(q.o).size !== 4) fail(`${tag} 选项有重复`);
+    if (typeof q.a !== 'number' || q.a < 0 || q.a > 3) fail(`${tag} 答案索引 ${q.a} 越界`);
+    if (!q.why || q.why.length < 8) fail(`${tag} 解析太短或缺失`);
+  });
+}
+
+// 10. 视频引用必须都指向 VIDEO_INFO 里存在的条目
+const checkBv = (bv, where) => {
+  if (!VIDEO_INFO[bv]) fail(`${where} 引用了 VIDEO_INFO 里没有的 ${bv}`);
+};
+Object.entries(SKILL_VIDEO).forEach(([sid, arr]) => {
+  if (!byId[sid]) fail(`SKILL_VIDEO 里的 ${sid} 不是有效技能`);
+  arr.forEach(bv => checkBv(bv, `SKILL_VIDEO['${sid}']`));
+});
+Object.entries(DOMAIN_VIDEO).forEach(([did, arr]) => {
+  if (!DOMAINS.some(d => d.id === did)) fail(`DOMAIN_VIDEO 里的 ${did} 不是有效领域`);
+  arr.forEach(bv => checkBv(bv, `DOMAIN_VIDEO['${did}']`));
+});
+PAPERS.forEach(p => checkBv(p.bv, `PAPERS ${p.year}`));
 
 // ---------- 报告 ----------
 const lvCount = { A: 0, B: 0, C: 0, D: 0 };
@@ -90,19 +122,14 @@ SKILLS.forEach(s => lvCount[s.lv]++);
 const maxStep = Math.max(...SKILLS.map(s => memo[s.id]));
 const steps = {};
 SKILLS.forEach(s => { steps[memo[s.id]] = (steps[memo[s.id]] || 0) + 1; });
+const A = SKILLS.filter(s => s.lv === 'A');
+const ANoQuiz = A.filter(s => !covered.has(s.id));
 
 console.log('数据自检');
 console.log(`  技能 ${SKILLS.length} 个 · 领域 ${DOMAINS.length} 个 · 知识点 ${SKILLS.reduce((a, s) => a + s.pts.length, 0)} 条`);
 console.log(`  重要度  A ${lvCount.A} · B ${lvCount.B} · C ${lvCount.C} · D ${lvCount.D}`);
 console.log(`  最长前置链 ${maxStep} 步，分布 ${JSON.stringify(steps)}`);
-console.log(`  卷面 ${EXAM.total} 分 / ${EXAM.minutes} 分钟`);
-console.log('  各领域：');
-for (const d of DOMAINS) {
-  const ds = SKILLS.filter(s => s.d === d.id);
-  const ext = new Set();
-  ds.forEach(s => (s.pre || []).forEach(p => { if (byId[p].d !== d.id) ext.add(p); }));
-  console.log(`    ${String(ds.length).padStart(2)} 个 · ${d.short}\t${d.lv}  ${d.score}\t外部前置 ${ext.size}`);
-}
-console.log('  可跳过（D 级）：' + SKILLS.filter(s => s.lv === 'D').map(s => s.n).join(' / '));
+console.log(`  题库 ${Object.keys(QUIZ).length} 个技能 / ${qTotal} 道题（A 级 ${A.length} 个，缺题 ${ANoQuiz.length} 个）`);
+console.log(`  视频 ${Object.keys(VIDEO_INFO).length} 个条目 · 技能级映射 ${Object.keys(SKILL_VIDEO).length} 个 · 真题讲解 ${PAPERS.length} 年`);
 console.log(bad ? `\n✗ 有 ${bad} 处问题` : '\n✓ 全部通过');
 process.exit(bad ? 1 : 0);
