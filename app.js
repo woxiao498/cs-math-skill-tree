@@ -23,6 +23,48 @@ DOMAINS.forEach(d => {
 
 const STEP_TEXT = ['', '第一步 · 零门槛', '第二步', '第三步', '第四步', '第五步', '第六步', '第七步', '第八步'];
 
+/* -----------------------------------------------------------------------
+ * 选项打乱
+ * 出题时为了写起来顺手，正确答案都写在第一个，结果 123 道全是选 A ——
+ * 学生一路选 A 就满分，练习等于废了。这里按题目内容做确定性打乱：
+ * 同一道题每次打开顺序一样（重做时不会因为选项挪位而干扰记忆），
+ * 但整体上正确答案均匀分布在 ABCD 四个位置。
+ * --------------------------------------------------------------------- */
+function seededShuffle(arr, seedStr){
+  let h = 2166136261;
+  for (let i = 0; i < seedStr.length; i++){
+    h ^= seedStr.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  let s = h >>> 0 || 1;
+  const rnd = () => {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >> 17;
+    s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(rnd() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+(function shuffleOptions(){
+  for (const [sid, arr] of Object.entries(QUIZ)){
+    arr.forEach((q, i) => {
+      if (!Array.isArray(q.o) || q.o.length !== 4) return;
+      const correct = q.o[q.a];
+      const mixed = seededShuffle(q.o, sid + '|' + i + '|' + q.q);
+      const pos = mixed.indexOf(correct);
+      if (pos < 0) return;              // 理论上不会发生，宁可不动
+      q.o = mixed;
+      q.a = pos;
+    });
+  }
+})();
+
 function softOf(id){ return SOFT_PRE[id] || []; }
 function isSoft(child, parent){ return softOf(child).includes(parent); }
 function hardPre(id){ return (byId[id].pre || []).filter(p => !isSoft(id, p)); }
@@ -73,6 +115,7 @@ const state = {
   quiz: null,        // 正在答的：{ sid, i, answers: [] }
   wrong: [],         // 错题本：[{ sid, qi, stage, due, ts }]
   progress: {},      // { sid: { tries, best } }
+  stats: {},         // { sid: { right, total } } 用来算各领域正确率
   streak: { days: 0, last: null }   // 连续学习天数：做过题才算
 };
 
@@ -96,7 +139,7 @@ function save(){
   try{
     localStorage.setItem(KEY, JSON.stringify({
       lit: [...state.lit], goal: state.goal, showSkippable: state.showSkippable,
-      wrong: state.wrong, progress: state.progress, streak: state.streak
+      wrong: state.wrong, progress: state.progress, streak: state.streak, stats: state.stats
     }));
   }catch(e){ /* file:// 下个别浏览器禁写，忽略，进度仍存在内存里 */ }
 }
@@ -110,6 +153,7 @@ function load(){
     state.showSkippable = !!d.showSkippable;
     state.wrong = (d.wrong || []).filter(w => byId[w.sid] && QUIZ[w.sid] && QUIZ[w.sid][w.qi]);
     state.progress = d.progress || {};
+    state.stats = d.stats || {};
     if (d.streak) state.streak = d.streak;
   }catch(e){}
 }
@@ -563,6 +607,10 @@ function answerQuiz(oi){
   z.answers[z.i] = oi;
   const q = QUIZ[z.sid][z.i];
   scheduleWrong(z.sid, z.i, oi === q.a);
+  const st = state.stats[z.sid] || { right: 0, total: 0 };
+  st.total += 1;
+  if (oi === q.a) st.right += 1;
+  state.stats[z.sid] = st;
   touchStreak();
   save();
   render();
@@ -577,6 +625,7 @@ function nextQuestion(){
 
 function finishQuiz(){
   const z = state.quiz;
+  if (z.solo){ quitQuiz(); return; }      // 错题单练不结算、不点亮
   const qs = QUIZ[z.sid];
   const right = z.answers.filter((a, i) => a === qs[i].a).length;
   const rate = right / qs.length;
@@ -762,6 +811,76 @@ function playVideo(bv){
 }
 
 /* =======================================================================
+ *  数据：哪块最该补
+ * ======================================================================= */
+function renderStats(){
+  const main = document.getElementById('main');
+  const byDom = {};
+  DOMAINS.forEach(d => { byDom[d.id] = { d, right: 0, total: 0, skills: 0, lit: 0 }; });
+  SKILLS.forEach(s => {
+    const b = byDom[s.d];
+    if (!b) return;
+    b.skills += 1;
+    if (state.lit.has(s.id)) b.lit += 1;
+    const st = state.stats[s.id];
+    if (st && st.total) { b.right += st.right; b.total += st.total; }
+  });
+
+  const rows = Object.values(byDom);
+  const totalR = rows.reduce((a, b) => a + b.right, 0);
+  const totalT = rows.reduce((a, b) => a + b.total, 0);
+  const rate = totalT ? Math.round(totalR / totalT * 100) : 0;
+  const litN = SKILLS.filter(s => state.lit.has(s.id)).length;
+  const st = state.streak || {};
+
+  // 做过的按正确率从低到高排（最弱在最上面），没做过的垫底
+  const tested = rows.filter(r => r.total > 0).sort((a, b) => a.right / a.total - b.right / b.total);
+  const untested = rows.filter(r => r.total === 0);
+
+  const bar = r => {
+    const p = r.total ? Math.round(r.right / r.total * 100) : 0;
+    const cls = !r.total ? 'none' : p >= 80 ? 'good' : p >= 60 ? 'mid' : 'bad';
+    return `<div class="sbar"><i class="${cls}" style="width:${r.total ? Math.max(p, 2) : 0}%"></i></div>`;
+  };
+
+  const rowHtml = r => `
+    <div class="srow" data-dom="${r.d.id}">
+      <div class="sname" style="color:${r.d.color}">${r.d.short}</div>
+      <div class="smeta">${r.total ? `做过 ${r.total} 题 · 正确率 ${Math.round(r.right / r.total * 100)}%` : '还没做过题'}</div>
+      ${bar(r)}
+      <div class="slit">${r.lit}/${r.skills}</div>
+    </div>`;
+
+  const weakest = tested[0];
+  const advice = !totalT
+    ? '还没做过题，先去首页点「直接做这一课」试试水。'
+    : weakest && weakest.right / weakest.total < 0.8
+      ? `最该补的是<b>${weakest.d.name}</b>，正确率只有 ${Math.round(weakest.right / weakest.total * 100)}%。`
+      : '各块正确率都在 80% 以上了，可以往上冲更难的技能。';
+
+  main.innerHTML = `
+    <div class="crumbs"><a data-go="home">领域总览</a> / <span>我的数据</span></div>
+    <div class="sec-title"><h2>我的数据</h2><span>只统计你做过的题，没做过的领域不参与排名</span></div>
+
+    <div class="kpis">
+      <div class="kpi"><b>${totalR}<span>/${totalT}</span></b><em>累计答对</em></div>
+      <div class="kpi"><b>${totalT ? rate + '%' : '—'}</b><em>总正确率</em></div>
+      <div class="kpi"><b>${litN}</b><em>已点亮技能</em></div>
+      <div class="kpi"><b>${st.days || 0}</b><em>连续学习天数</em></div>
+    </div>
+
+    <div class="advice">${advice}</div>
+
+    <div class="sec-title" style="margin-top:24px"><h2>各领域正确率</h2><span>从弱到强</span></div>
+    <div class="slist">${tested.map(rowHtml).join('') || '<div class="empty" style="padding:24px">还没有任何做题记录</div>'}</div>
+
+    ${untested.length ? `
+      <div class="sec-title" style="margin-top:22px"><h2>还没碰过的</h2><span>${untested.length} 个领域</span></div>
+      <div class="slist dim">${untested.map(rowHtml).join('')}</div>` : ''}
+  `;
+}
+
+/* =======================================================================
  *  渲染总入口
  * ======================================================================= */
 function renderMain(){
@@ -772,6 +891,7 @@ function renderMain(){
   if (state.view === 'plan') return renderPlan();
   if (state.view === 'wrong') return renderWrong();
   if (state.view === 'papers') return renderPapers();
+  if (state.view === 'stats') return renderStats();
   return renderHome();
 }
 function render(){
@@ -800,6 +920,7 @@ function syncHash(){
     else if (state.view === 'plan') h = '#plan';
     else if (state.view === 'wrong') h = '#wrong';
     else if (state.view === 'papers') h = '#papers';
+    else if (state.view === 'stats') h = '#stats';
   }
   if (location.hash === h) return;
   try{ history.replaceState(null, '', location.pathname + location.search + h); }
@@ -922,12 +1043,32 @@ function selectSkill(id){
   }
   if (state.view === 'domain') state.domainId = byId[id].d;
   render();
+  // 窄屏上详情面板在下面，点完自动滚过去，不然像没反应
+  if (window.innerWidth <= 1080 && state.view !== 'quiz'){
+    setTimeout(() => {
+      const p = document.getElementById('panel');
+      if (p) p.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  }
 }
 
 document.getElementById('btn-home').onclick = () => goTo('home');
 document.getElementById('btn-rank').onclick = () => goTo('rank');
 document.getElementById('btn-wrong').onclick = () => goTo('wrong');
 document.getElementById('btn-papers').onclick = () => goTo('papers');
+document.getElementById('btn-stats').onclick = () => goTo('stats');
+
+/* 键盘：做题时 1~4 直接选，回车下一题 —— 手机上用不到，电脑上快很多 */
+document.addEventListener('keydown', e => {
+  if (state.view !== 'quiz') return;
+  const z = state.quiz;
+  if (!z || z.done) return;
+  if (e.key >= '1' && e.key <= '4'){
+    if (z.answers[z.i] === null){ e.preventDefault(); answerQuiz(+e.key - 1); }
+  } else if (e.key === 'Enter'){
+    if (z.answers[z.i] !== null){ e.preventDefault(); nextQuestion(); }
+  }
+});
 
 /* 分享给同学：手机上走系统分享，桌面复制链接 */
 document.getElementById('btn-share').onclick = async () => {
@@ -1012,6 +1153,13 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   if (goal && byId[goal]) state.goal = goal;
   if (p.has('qf')) state.qFilter = p.get('qf');
   if (p.has('streak')) state.streak = { days: +p.get('streak'), last: localDate(0) };
+  // ?demoStats=1 —— 造点做题记录，方便看数据页
+  if (p.has('demoStats')){
+    const demo = { s3: [3, 3], i3: [2, 3], t9: [1, 3], g8: [2, 2], r6: [1, 2], q2: [2, 2] };
+    Object.entries(demo).forEach(([sid, [r, t]]) => { state.stats[sid] = { right: r, total: t }; });
+    ['p1', 'p2', 's1', 's2', 's3', 'i2'].forEach(x => state.lit.add(x));
+    state.streak = { days: 5, last: localDate(0) };
+  }
   // ?quiz=s3&qi=0&pick=1 —— 直接看刷题页，pick 预填一个已选答案
   const qz = p.get('quiz');
   if (qz && hasQuiz(qz)){
@@ -1048,6 +1196,7 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   if (h === 'plan') { state.view = 'plan'; return; }
   if (h === 'wrong') { state.view = 'wrong'; return; }
   if (h === 'papers') { state.view = 'papers'; return; }
+  if (h === 'stats') { state.view = 'stats'; return; }
 })();
 
 document.getElementById('exam-line').textContent =

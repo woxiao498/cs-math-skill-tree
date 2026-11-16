@@ -208,6 +208,62 @@
   footer a{color:#6a819c}
   .kbd{font-size:10.5px;padding:1px 5px;border:1px solid #2a3646;border-radius:4px;color:#8496ad}
 
+  /* ---------- 手机 ---------- */
+  @media (max-width:640px){
+    .topbar{padding:10px 14px 8px;gap:9px}
+    .brand h1{font-size:15px}
+    .brand p{font-size:10.5px}
+    .search-wrap{min-width:100%;order:3;max-width:none}
+    .top-actions{gap:6px;font-size:11.5px}
+    .top-actions .btn{padding:5px 9px;font-size:11.5px}
+    main{padding:16px 14px 32px}
+    aside#panel{padding:16px 14px}
+    .sec-title h2{font-size:14px}
+    .dom-grid{grid-template-columns:1fr}
+    .dom-card .desc{min-height:auto}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .kpi b{font-size:21px}
+    /* 数据页的领域行：小屏改成两行，别硬挤四列 */
+    .srow{grid-template-columns:78px 1fr 46px;
+      grid-template-areas:"n m l" "b b b";row-gap:7px;padding:10px 12px}
+    .sname{grid-area:n}
+    .smeta{grid-area:m}
+    .slit{grid-area:l}
+    .sbar{grid-area:b}
+    .qbox{padding:14px 14px}
+    .qtext{font-size:13.5px}
+    .opt{font-size:12.5px;padding:10px 11px}
+    .player iframe{height:230px}
+    .pcard{padding:10px 12px}
+    .pyear{flex:0 0 46px;font-size:17px}
+    .qr-score{font-size:50px}
+    .quiz-result{margin:26px auto}
+  }
+
+  /* ---------- 数据页 ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
+  .kpi{background:#111823;border:1px solid #22303f;border-radius:10px;padding:14px 12px;text-align:center}
+  .kpi b{display:block;font-size:24px;font-weight:800;color:#e6eef8;line-height:1.2;letter-spacing:-1px}
+  .kpi b span{font-size:13px;font-weight:600;color:#4f6379}
+  .kpi em{display:block;font-style:normal;font-size:11px;color:#5f7085;margin-top:4px}
+  .advice{background:#101a26;border:1px solid #22344a;border-left:3px solid #d69a3c;border-radius:8px;
+    padding:11px 14px;font-size:12.8px;color:#c3d2e0;line-height:1.7}
+  .advice b{color:#e8c78a}
+  .slist{display:flex;flex-direction:column;gap:7px}
+  .slist.dim{opacity:.55}
+  .srow{display:grid;grid-template-columns:70px 1fr 130px 52px;gap:10px;align-items:center;
+    background:#111823;border:1px solid #22303f;border-radius:8px;padding:9px 13px;cursor:pointer}
+  .srow:hover{border-color:#2f4260;background:#141d29}
+  .sname{font-size:12.5px;font-weight:600}
+  .smeta{font-size:11.5px;color:#7d92aa}
+  .sbar{height:6px;border-radius:3px;background:#0d141c;overflow:hidden}
+  .sbar i{display:block;height:100%;border-radius:3px}
+  .sbar i.good{background:#3f9d70}
+  .sbar i.mid{background:#b08a3e}
+  .sbar i.bad{background:#a85043}
+  .sbar i.none{background:#1b2431}
+  .slit{font-size:11px;color:#5f7085;text-align:right}
+
   /* ---------- 首页起步引导 ---------- */
   .startbar{
     display:flex;align-items:center;gap:16px;flex-wrap:wrap;
@@ -319,6 +375,7 @@
     <button class="btn" id="btn-rank">重要度排行</button>
     <button class="btn" id="btn-wrong">错题本<span class="badge" id="wrong-badge"></span></button>
     <button class="btn" id="btn-papers">真题</button>
+    <button class="btn" id="btn-stats">数据</button>
     <button class="btn" id="btn-share">分享</button>
     <button class="btn" id="btn-export">导出</button>
     <label class="btn" for="import-file">导入</label>
