@@ -117,6 +117,7 @@ const state = {
   progress: {},      // { sid: { tries, best } }
   stats: {},         // { sid: { right, total } } 用来算各领域正确率
   paperKey: false,   // 练习卷是否显示答案
+  paperMode: 'normal', // normal = 随机整卷；wrong = 错题卷
   streak: { days: 0, last: null }   // 连续学习天数：做过题才算
 };
 
@@ -766,6 +767,9 @@ function renderWrong(){
       <span>${list.length} 道 · ${due.length ? `${due.length} 道到期该复习了` : '暂时都还没到复习时间'}</span>
     </div>
     <div class="legend"><span>规则：答错的题 1 天后回来，答对一次往后推一档（3 天 → 7 天 → 15 天），走完全部四档就移出去</span></div>
+    <div style="margin-bottom:16px">
+      <button class="btn primary" data-wrong-paper>把这份错题组成卷子打印（${list.length} 道选择）</button>
+    </div>
     <div class="wlist">${rows}</div>`;
 }
 
@@ -872,7 +876,16 @@ const PAPER_SOLVE = [
 
 let paperCache = null;   // 同一份卷子重复打印时不要每次换题
 
-function buildPaper(){
+function buildPaper(mode){
+  // 错题卷：把错题本里的选择题原样拼成一份，按到期时间排
+  if (mode === 'wrong' && state.wrong.length){
+    const picks = state.wrong.slice()
+      .sort((a, b) => a.due - b.due)
+      .map(w => ({ sid: w.sid, i: w.qi, q: QUIZ[w.sid][w.qi] }))
+      .filter(x => x.q);
+    return { mode: 'wrong', choice: picks.slice(0, 20), fill: [], solve: [], stamp: localDate(0) };
+  }
+
   const all = [];
   Object.entries(QUIZ).forEach(([sid, arr]) => arr.forEach((q, i) => all.push({ sid, i, q })));
   // 先按技能打散，保证 15 道题尽量来自不同技能
@@ -906,6 +919,7 @@ function buildPaper(){
   };
 
   return {
+    mode: 'normal',
     choice: picks,
     fill: pickN(PAPER_FILL, 5),
     solve: pickN(PAPER_SOLVE, 4),
@@ -914,8 +928,9 @@ function buildPaper(){
 }
 
 function renderPaper(){
-  if (!paperCache) paperCache = buildPaper();
+  if (!paperCache) paperCache = buildPaper(state.paperMode);
   const p = paperCache;
+  const isWrong = p.mode === 'wrong';
   const showKey = !!state.paperKey;
   const main = document.getElementById('main');
 
@@ -927,45 +942,50 @@ function renderPaper(){
       <div class="po">${['A','B','C','D'].map((L, i) => `<span>${L}. ${q.o[i]}</span>`).join('')}</div></div>`;
   }).join('');
 
-  const fillHtml = p.fill.map((q, i) => `<div class="pq"><div class="qt">${16 + i}. ${q.q}</div></div>`).join('');
-  const solveHtml = p.solve.map((q, i) => `<div class="pq"><div class="qt">${21 + i}. ${q.q}</div><div class="pspace"></div></div>`).join('');
+  const off = p.choice.length;
+  const fillHtml = p.fill.map((q, i) => `<div class="pq"><div class="qt">${off + 1 + i}. ${q.q}</div></div>`).join('');
+  const solveHtml = p.solve.map((q, i) => `<div class="pq"><div class="qt">${off + p.fill.length + 1 + i}. ${q.q}</div><div class="pspace"></div></div>`).join('');
 
   const keyHtml = `
     <div class="pkey">
       <h3>参考答案（自编题，不是官方答案）</h3>
       <div class="kgroup"><b>一、选择题</b><div>${p.choice.map((x, i) => `${i + 1}. ${'ABCD'[x.q.a]}`).join('　')}</div></div>
-      <div class="kgroup"><b>二、填空题</b><div>${p.fill.map((q, i) => `${16 + i}. ${q.a}`).join('　｜　')}</div></div>
-      <div class="kgroup"><b>三、解答题</b>${p.solve.map((q, i) => `<div class="kitem"><b>${21 + i}.</b> ${escHtml(q.a)}<div class="kwhy">${escHtml(q.why)}</div></div>`).join('')}</div>
-      <div class="kgroup"><b>选择题对应技能</b><div style="font-size:11.5px;color:#666">${p.choice.map((x, i) => `${i + 1}.${byId[x.sid].n}`).join('　')}</div></div>
+      ${p.fill.length ? `<div class="kgroup"><b>二、填空题</b><div>${p.fill.map((q, i) => `${off + 1 + i}. ${q.a}`).join('　｜　')}</div></div>` : ''}
+      ${p.solve.length ? `<div class="kgroup"><b>三、解答题</b>${p.solve.map((q, i) => `<div class="kitem"><b>${off + p.fill.length + 1 + i}.</b> ${escHtml(q.a)}<div class="kwhy">${escHtml(q.why)}</div></div>`).join('')}</div>` : ''}
+      <div class="kgroup"><b>每题对应技能</b><div style="font-size:11.5px;color:#666">${p.choice.map((x, i) => `${i + 1}.${byId[x.sid].n}`).join('　')}</div></div>
     </div>`;
 
   main.innerHTML = `
-    <div class="crumbs noprint"><a data-go="home">领域总览</a> / <span>打印练习卷</span></div>
+    <div class="crumbs noprint"><a data-go="home">领域总览</a> / <span>${isWrong ? '错题卷' : '打印练习卷'}</span></div>
     <div class="noprint" style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px">
       <button class="btn primary" data-paper-print>打印 / 存成 PDF</button>
       <button class="btn" data-paper-toggle>${showKey ? '只看卷子' : '显示答案'}</button>
-      <button class="btn" data-paper-new>换一张卷子</button>
+      <button class="btn" data-paper-new>${isWrong ? '重新取一遍错题' : '换一张卷子'}</button>
     </div>
     <div class="noprint" style="font-size:12px;color:#7d92aa;line-height:1.75;margin-bottom:18px">
-      15 选择 + 5 填空 + 4 解答，共 150 分、120 分钟，结构和真卷一致。<br>
-      <b style="color:#b9a06a">题目是自编的，不是历年原卷</b> —— 真题原卷我没有，也不适合转存到公开仓库。想要原卷得去学科网那类地方找。<br>
-      打印时可以选「另存为 PDF」，手机上用浏览器分享 → 打印也行。
+      ${isWrong
+        ? `这份卷子是从你的错题本里取的，共 ${p.choice.length} 道选择题，按「该复习的先后」排好了。<br>做的时候先别看答案，做完点「显示答案」再对。`
+        : `15 选择 + 5 填空 + 4 解答，共 150 分、120 分钟，结构和真卷一致。<br>
+      <b style="color:#b9a06a">题目是自编的，不是历年原卷</b> —— 真题原卷我没有，也不适合转存到公开仓库。`}
+      <br>打印时可以选「另存为 PDF」，手机上用浏览器分享 → 打印也行。
     </div>
 
     <div class="paper">
       <div class="phead">
-        <h2>广东省 3+证书（高职高考）数学 · 练习卷</h2>
+        <h2>广东省 3+证书（高职高考）数学 · ${isWrong ? '错题重做卷' : '练习卷'}</h2>
         <div class="pmeta">
-          <span>考试时间 120 分钟</span><span>满分 150 分</span><span>生成于 ${p.stamp}</span>
+          <span>${isWrong ? `共 ${p.choice.length} 题` : '考试时间 120 分钟'}</span>
+          ${isWrong ? '' : '<span>满分 150 分</span>'}
+          <span>生成于 ${p.stamp}</span>
         </div>
-        <div class="pnote">本卷为自编练习题，非官方真题。一、选择题 15 小题每题 5 分共 75 分；二、填空题 5 小题每题 5 分共 25 分；三、解答题 4 小题共 50 分。</div>
+        <div class="pnote">${isWrong
+          ? '本卷由你自己的错题组成，题目为自编练习题，非官方真题。'
+          : '本卷为自编练习题，非官方真题。一、选择题 15 小题每题 5 分共 75 分；二、填空题 5 小题每题 5 分共 25 分；三、解答题 4 小题共 50 分。'}</div>
       </div>
-      <div class="psec">一、选择题（每小题 5 分，共 75 分）</div>
+      <div class="psec">一、选择题${isWrong ? '' : '（每小题 5 分，共 75 分）'}</div>
       ${choiceHtml}
-      <div class="psec">二、填空题（每小题 5 分，共 25 分）</div>
-      ${fillHtml}
-      <div class="psec">三、解答题（共 50 分）</div>
-      ${solveHtml}
+      ${p.fill.length ? `<div class="psec">二、填空题（每小题 5 分，共 25 分）</div>${fillHtml}` : ''}
+      ${p.solve.length ? `<div class="psec">三、解答题（共 50 分）</div>${solveHtml}` : ''}
       ${showKey ? keyHtml : ''}
     </div>
   `;
@@ -1104,7 +1124,24 @@ document.getElementById('main').addEventListener('click', e => {
 
   if (e.target.closest('[data-paper-print]')){ window.print(); return; }
   if (e.target.closest('[data-paper-toggle]')){ state.paperKey = !state.paperKey; render(); return; }
-  if (e.target.closest('[data-paper-new]')){ paperCache = null; render(); return; }
+  if (e.target.closest('[data-paper-new]')){
+    paperCache = null;
+    if (state.paperMode === 'wrong' && !state.wrong.length){
+      alert('错题本是空的，没有可以组卷的题了。');
+      return;
+    }
+    render(); return;
+  }
+  if (e.target.closest('[data-wrong-paper]')){
+    if (!state.wrong.length) return;
+    state.paperMode = 'wrong';
+    paperCache = null;
+    state.view = 'paper';
+    state.selected = null;
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
 
   const opt = e.target.closest('[data-quiz-opt]');
   if (opt){ answerQuiz(+opt.dataset.quizOpt); return; }
@@ -1143,6 +1180,8 @@ function goTo(view){
   document.getElementById('search').value = '';
   if (view !== 'domain') state.selected = null;
   if (view !== 'quiz') state.quiz = null;
+  // 从菜单点「真题 → 生成练习卷」进的是普通卷；错题卷走自己的按钮
+  if (view === 'paper') { state.paperMode = 'normal'; paperCache = null; }
   render();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1318,6 +1357,7 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   if (p.has('qf')) state.qFilter = p.get('qf');
   if (p.has('streak')) state.streak = { days: +p.get('streak'), last: localDate(0) };
   if (p.has('paperKey')) state.paperKey = true;
+  if (p.get('paperMode') === 'wrong') state.paperMode = 'wrong';
   // ?demoStats=1 —— 造点做题记录，方便看数据页
   if (p.has('demoStats')){
     const demo = { s3: [3, 3], i3: [2, 3], t9: [1, 3], g8: [2, 2], r6: [1, 2], q2: [2, 2] };
