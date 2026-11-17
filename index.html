@@ -103,13 +103,14 @@
     position:relative;padding:15px 16px 13px;border-radius:12px;cursor:pointer;
     background:linear-gradient(180deg,#151b26,#121821);border:1px solid var(--line);
     transition:.18s;overflow:hidden;
+    display:flex;flex-direction:column;   /* 描述行数不一时，底行也要对齐在同一条线上 */
   }
   .dom-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--dc);opacity:.75}
   .dom-card:hover{border-color:#33445c;transform:translateY(-2px);box-shadow:0 10px 26px -14px #000}
   .dom-card h3{margin:0 0 3px;font-size:14.5px;font-weight:620;color:#e8eef7}
   .dom-card .meta{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--txt3);margin-bottom:8px;flex-wrap:wrap}
   .dom-card .desc{font-size:12px;color:var(--txt2);line-height:1.55;min-height:54px}
-  .dom-card .foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:11px;color:var(--txt3)}
+  .dom-card .foot{display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:10px;font-size:11px;color:var(--txt3)}
   .mini-bar{height:3px;border-radius:2px;background:#0c1119;flex:1;margin:0 10px;overflow:hidden}
   .mini-bar i{display:block;height:100%;background:var(--dc);width:0}
 
@@ -195,7 +196,9 @@
   .rank-row:hover{background:#141b26;border-color:#28344a}
   .rank-row .nm{font-size:13px;font-weight:560;color:#dbe4f0;min-width:190px}
   .rank-row .dom{font-size:11px;color:var(--txt3);min-width:76px}
-  .rank-row .how{font-size:11.5px;color:var(--txt2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* 掌握标准不再锁成一行：锁了就出现「左边 300px 文字 + 中间 500px 空白 + 右边标签」 */
+  .rank-row .how{font-size:11.5px;color:var(--txt2);flex:1;max-width:560px;line-height:1.5}
+  .rank-row .qtags{display:flex;gap:4px;margin-left:auto;flex:0 0 auto}
   .rank-group{margin:0 0 8px;font-size:12px;color:var(--txt3);padding:14px 4px 6px;border-bottom:1px solid #1b2431;display:flex;gap:8px;align-items:center}
 
   /* ---------- 清单 ---------- */

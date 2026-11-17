@@ -580,7 +580,7 @@ function renderRank(){
       <span class="nm">${s.n}</span>
       <span class="dom" style="color:${d.color}88">${d.short}</span>
       <span class="how">${s.how}</span>
-      <span style="display:flex;gap:4px">${q}</span>
+      <span class="qtags">${q}</span>
     </div>`;
   };
 
