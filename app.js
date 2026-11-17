@@ -305,8 +305,10 @@ function renderProgress(){
   document.getElementById('pbar-fill').style.width = pct + '%';
   const st = state.streak || {};
   const streakTxt = st.days ? ` · 连续学习 ${st.days} 天` : '';
+  const cov = coveredScore();
+  const covTxt = done ? ` · 按往年卷面粗估能覆盖约 ${cov} / ${EXAM.total} 分` : '';
   document.getElementById('pbar-text').textContent =
-    `已点亮 ${done} / ${vis.length} 个技能 · ${pct}%${streakTxt}`;
+    `已点亮 ${done} / ${vis.length} 个技能 · ${pct}%${covTxt}${streakTxt}`;
 }
 
 /* 今天学哪一课：从前置已齐、还没点亮的技能里挑一个（重要度优先、步数小的优先）。
@@ -324,6 +326,14 @@ function pickTodaySkill(){
     return LV_ORDER[a.lv] - LV_ORDER[b.lv];
   });
   return ready[0].id;
+}
+
+/* 点亮的技能大概值多少分：按往年卷面把 150 分摊到 A/B/C 三档估算。
+ * 粗，但比「点亮 4 / 102」有用 —— 学生关心的是离 60 分还有多远。 */
+const COVER_PER_SKILL = { A: 4.6, B: 0.62, C: 0.42 };
+function coveredScore(){
+  return Math.round(SKILLS.filter(s => state.lit.has(s.id))
+    .reduce((a, s) => a + (COVER_PER_SKILL[s.lv] || 0), 0));
 }
 
 /* =======================================================================
@@ -387,6 +397,7 @@ function renderHome(){
         const mins = Math.max(2, Math.round(QUIZ[tid].length * 1.2));
         return `<div class="flabel">今天只做这一课</div>
           <div class="fname">${ts.n}</div>
+          <div class="fsub">这课讲：${(ts.pts || []).slice(0, 2).join('、')}</div>
           <div class="fmeta">${QUIZ[tid].length} 道题 · 约 ${mins} 分钟 · ${domById[ts.d].name} · 做完就点亮</div>
           <div class="fbtns">
             <button class="btn fprimary" data-start="${tid}">现在开始</button>
@@ -855,6 +866,11 @@ function answerQuiz(oi){
   z.answers[z.i] = oi;
   const q = QUIZ[z.sid][qi];
   scheduleWrong(z.sid, qi, oi === q.a);
+  // 单题订正：不自动跳，让学生看完解析再点「订正完了」
+  if (z.redoOne){
+    render();
+    return;
+  }
   const st = state.stats[z.sid] || { right: 0, total: 0 };
   st.total += 1;
   if (oi === q.a) st.right += 1;
@@ -933,10 +949,11 @@ function renderQuiz(){
           <div class="qr-wrong-h">这次错的 ${wrongOnes.length} 题（点一行看为什么错）</div>
           ${wrongOnes.map(x => `<div class="qr-wrow" data-review>
             <span class="qn">${x.idx + 1}</span>
-            <div>
+            <div class="qr-wbody">
               <div class="qt">${qs[x.qi].q}</div>
               <div class="why">${qs[x.qi].why}</div>
             </div>
+            <button class="btn mini qr-redo" data-redo-wrong="${x.idx}">重做这题</button>
           </div>`).join('')}
         </div>` : ''}
         <div class="qr-actions">
@@ -997,7 +1014,9 @@ function renderQuiz(){
         <div class="qnav">
           ${solo
             ? `<button class="btn primary" data-quiz-quit>返回错题本</button>`
-            : `<button class="btn primary" data-quiz-next>${i === qs.length - 1 ? '看结果' : '下一题'}</button>`}
+            : z.redoOne
+              ? `<button class="btn primary" data-quiz-next>订正完了，回去看成绩</button>`
+              : `<button class="btn primary" data-quiz-next>${i === qs.length - 1 ? '看结果' : '下一题'}</button>`}
         </div>` : ''}
     </div>
 
@@ -1771,6 +1790,19 @@ document.getElementById('main').addEventListener('click', e => {
   const gs = e.target.closest('[data-goto-skill]');
   if (gs){ goSkill(gs.dataset.gotoSkill); return; }
 
+  // 只重做错的那题：对的成绩保留，做完这道直接重新结算。
+  // 注意要排在 data-review 前面 —— 按钮在整行里，整行的监听会先吃掉点击。
+  const rw = e.target.closest('[data-redo-wrong]');
+  if (rw && state.quiz){
+    const idx = +rw.dataset.redoWrong;
+    state.quiz.i = idx;
+    state.quiz.answers[idx] = null;
+    state.quiz.done = false;
+    state.quiz.redoOne = true;
+    render();
+    return;
+  }
+
   // 结算页点一行错题，展开解析
   const wr = e.target.closest('[data-review]');
   if (wr){ wr.classList.toggle('open'); return; }
@@ -1850,7 +1882,17 @@ document.getElementById('main').addEventListener('click', e => {
 
   const opt = e.target.closest('[data-quiz-opt]');
   if (opt){ answerQuiz(+opt.dataset.quizOpt); return; }
-  if (e.target.closest('[data-quiz-next]')){ nextQuestion(); return; }
+  if (e.target.closest('[data-quiz-next]')){
+    // 单题订正完：直接重新结算（答对的成绩保留，不用整课重来）
+    if (state.quiz && state.quiz.redoOne){
+      state.quiz.redoOne = false;
+      state.quiz.done = true;
+      finishQuiz();
+      return;
+    }
+    nextQuestion();
+    return;
+  }
   if (e.target.closest('[data-quiz-quit]')){ quitQuiz(); return; }
   if (e.target.closest('[data-quiz-retry]')){ startQuiz(state.quiz.sid); return; }
 
