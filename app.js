@@ -283,8 +283,15 @@ function scheduleWrong(sid, qi, correct){
 const dueWrong = () => state.wrong.filter(w => w.due <= Date.now());
 
 /* 这个技能该看哪些视频：技能级优先，没有就用领域级兜底 */
+/* 这两个技能没有对口的视频，领域兜底也跟本课无关（p4 韦达定理 ↔ 基础运算）。
+ * 宁可写「这一课还没找到合适的视频」，也不拿领域入门片充数 —— 点进去发现讲的是别的东西，比没有更糟。 */
+const NO_FALLBACK_VIDEO = new Set(['p4', 't8']);
+
 function videoList(id){
-  const bvs = SKILL_VIDEO[id] || DOMAIN_VIDEO[byId[id].d] || [];
+  let bvs;
+  if (SKILL_VIDEO[id]) bvs = SKILL_VIDEO[id];
+  else if (NO_FALLBACK_VIDEO.has(id)) bvs = [];
+  else bvs = DOMAIN_VIDEO[byId[id].d] || [];
   return bvs.map(bv => VIDEO_INFO[bv] ? { bv, ...VIDEO_INFO[bv] } : null).filter(Boolean);
 }
 
@@ -1839,6 +1846,7 @@ document.getElementById('exam-line').textContent =
   `${EXAM.total} 分 · ${EXAM.minutes} 分钟 · 15 选择 + 5 填空 + 4 解答`;
 document.getElementById('foot').innerHTML = `
   广东 3+证书（高职高考）数学技能树 · ${SKILLS.length} 个技能 / ${Object.keys(QUIZ).length} 个技能配了题（共 ${quizCount()} 道）/ ${DOMAINS.length} 个领域<br>
+  <b style="color:#8a9bb0">数据截至 2026 年 11 月，适用 2027 届（2027 年 1 月考试）</b> —— 考纲和题型若有变动，这一版就过时了。<br>
   <b style="color:#8a7550">练习题全部是自编的仿真题，不是历年原卷</b>；解析按"错在哪"讲，不保证和官方答案一致。<br>
   卷面结构依据 2021 版《数学科考试说明》（2021 年起考试院不再公布新考纲，命题依据为《中等职业学校数学课程标准（2020 年版）》）。<br>
   重要度按 2014~2024 各板块平均分值统计与近年真题逐题评述排定。凡标注「存疑」的地方，说明我没能拿到原卷核实 —— 别当结论用。<br>
