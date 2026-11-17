@@ -322,6 +322,17 @@
   .lnm{font-size:13px;color:#dbe4f0;font-weight:560}
   .lsub{font-size:11px;color:#7d92aa;margin-top:3px;padding-left:26px}
 
+  /* ---------- 易错点 ---------- */
+  .pit-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+  .pit-card{background:#111823;border:1px solid #22303f;border-radius:10px;padding:13px 15px;
+    cursor:pointer;transition:.14s}
+  .pit-card:hover{border-color:#35506e;background:#131d2a}
+  .pit-card.done{border-color:#2e6b4d;background:#10221a}
+  .pit-h{font-size:13.5px;font-weight:600;color:#dbe7f5;display:flex;align-items:baseline;gap:8px}
+  .pit-n{margin-left:auto;font-size:11px;color:#7d92aa;font-weight:400;flex:0 0 auto}
+  .pit-d{margin-top:6px;font-size:11.5px;color:#93a3b8;line-height:1.65}
+  .pit-s{margin-top:8px;font-size:10.5px;color:#5f7085;line-height:1.5}
+
   /* ---------- 数据页 ---------- */
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
   .kpi{background:#111823;border:1px solid #22303f;border-radius:10px;padding:14px 12px;text-align:center}
@@ -692,6 +703,7 @@
     <div class="more-wrap" id="more-wrap">
       <button class="btn" id="btn-more">更多 ▾</button>
       <div class="more-menu">
+        <button class="btn" id="btn-pits">易错点</button>
         <button class="btn" id="btn-share">分享给同学</button>
         <button class="btn" id="btn-export">导出进度</button>
         <label class="btn" for="import-file">导入进度</label>
@@ -717,6 +729,7 @@
 <script src="soft-pre.js"></script>
 <script src="videos.js"></script>
 <script src="quiz.js"></script>
+<script src="pits.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

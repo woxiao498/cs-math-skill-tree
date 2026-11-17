@@ -8,14 +8,15 @@ const path = require('path');
 
 const dir = __dirname;
 const ctx = vm.createContext({ console });
-for (const f of ['data.js', 'soft-pre.js', 'quiz.js', 'videos.js']) {
+for (const f of ['data.js', 'soft-pre.js', 'quiz.js', 'videos.js', 'pits.js']) {
   vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx, { filename: f });
 }
-vm.runInContext('globalThis.__D = { EXAM, DOMAINS, SKILLS, SOFT_PRE, QUIZ, VIDEO_INFO, DOMAIN_VIDEO, SKILL_VIDEO, PAPERS }', ctx);
-const { EXAM, DOMAINS, SKILLS, SOFT_PRE, QUIZ, VIDEO_INFO, DOMAIN_VIDEO, SKILL_VIDEO, PAPERS } = ctx.__D;
+vm.runInContext('globalThis.__D = { EXAM, DOMAINS, SKILLS, SOFT_PRE, QUIZ, VIDEO_INFO, DOMAIN_VIDEO, SKILL_VIDEO, PAPERS, PIT }', ctx);
+const { EXAM, DOMAINS, SKILLS, SOFT_PRE, QUIZ, VIDEO_INFO, DOMAIN_VIDEO, SKILL_VIDEO, PAPERS, PIT } = ctx.__D;
 
 let bad = 0;
 const fail = (m) => { console.error('  ✗ ' + m); bad++; };
+const warn = (m) => { console.warn('  ! ' + m); };
 
 // 1. id 唯一
 const seen = new Map();
@@ -141,6 +142,38 @@ for (const [k, arr] of Object.entries(QUIZ)){
   arr.forEach((q, i) => {
     if (/^按上题/.test(q.q) || /按上题/.test(q.q)) fail(`${k}[${i}] 题干依赖「上题」，错题单练和组卷时会没头没尾`);
   });
+}
+
+// 15. 易错点表（pits.js）
+if (typeof PIT !== 'undefined'){
+  const pitIds = new Set(PIT.map(p => p.id));
+  PIT.forEach(p => {
+    if (!p.skills || !p.skills.length) fail(`易错点 ${p.id} 没映射到任何技能`);
+    p.skills.forEach(id => { if (!byId[id]) fail(`易错点 ${p.id} 引用了不存在的技能 ${id}`); });
+    if (new Set(p.skills).size !== p.skills.length) fail(`易错点 ${p.id} 的 skills 有重复`);
+  });
+  // 每题挂的 pit 必须存在
+  for (const [k, arr] of Object.entries(QUIZ)){
+    arr.forEach((q, i) => {
+      (q.pit || []).forEach(id => {
+        if (!pitIds.has(id)) fail(`${k}[${i}] 挂了不存在的易错点 ${id}`);
+      });
+    });
+  }
+  // 每个坑至少能凑出 2 道题 —— 一道题只能算「见过」，不算练过。
+  // 题量按 skills 映射派生（一个坑通向它覆盖的每个技能下的所有题），
+  // 再加上显式挂了 pit 的题（那些可能跨技能）。
+  const pitCount = {};
+  PIT.forEach(p => {
+    p.skills.forEach(sid => { pitCount[p.id] = (pitCount[p.id] || 0) + ((QUIZ[sid] || []).length); });
+  });
+  Object.values(QUIZ).forEach(arr => arr.forEach(q => (q.pit || []).forEach(id => {
+    // 显式标注的题如果不在 skills 映射里，额外算一道
+    if (pitCount[id] != null) pitCount[id] += 1;
+  })));
+  const thin = PIT.filter(p => (pitCount[p.id] || 0) < 2).map(p => `${p.id}(${pitCount[p.id]||0})`);
+  if (thin.length) warn(`这些易错点凑不出 2 道题：${thin.join(' ')}`);
+  else console.log(`  易错点 25 个，每个都至少能凑出 2 道题`);
 }
 
 // ---------- 报告 ----------

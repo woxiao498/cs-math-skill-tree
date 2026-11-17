@@ -161,6 +161,7 @@ const state = {
   unlitSet: new Set(), // 用户手动取消过点亮的技能，sweep 不许再自动加回去
   paperKey: false,   // 练习卷是否显示答案
   domainView: 'map', // 窄屏领域视图：map 地图 / list 竖排列表
+  pitId: null,       // 当前打开的易错点
   paperMode: 'normal', // normal = 随机整卷；wrong = 错题卷
   streak: { days: 0, last: null }   // 连续学习天数：做过题才算
 };
@@ -1803,6 +1804,76 @@ function renderStats(){
 }
 
 /* =======================================================================
+ *  易错点：跨技能的错因网
+ * ======================================================================= */
+function questionsOfPit(pitId){
+  const p = PIT_BY_ID[pitId];
+  if (!p) return [];
+  const seen = new Set();
+  const out = [];
+  const push = (sid, i, q) => {
+    const key = sid + ':' + i;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ sid, i, q });
+  };
+  p.skills.forEach(sid => (QUIZ[sid] || []).forEach((q, i) => push(sid, i, q)));
+  // 显式挂了 pit 的题也收进来（可能不在 skills 映射里）
+  Object.entries(QUIZ).forEach(([sid, arr]) => arr.forEach((q, i) => {
+    if ((q.pit || []).includes(pitId)) push(sid, i, q);
+  }));
+  return out;
+}
+
+function renderPits(){
+  const main = document.getElementById('main');
+  const rows = PIT.map(p => {
+    const n = questionsOfPit(p.id).length;
+    const mastered = state.pitDone && state.pitDone[p.id];
+    return `<div class="pit-card ${mastered ? 'done' : ''}" data-pit="${p.id}" tabindex="0" role="button">
+      <div class="pit-h">${mastered ? '✓ ' : ''}${p.name}<span class="pit-n">${n} 道题</span></div>
+      <div class="pit-d">${p.desc}</div>
+      <div class="pit-s">会在这几课踩到：${p.skills.map(s => byId[s] ? byId[s].n : s).join('、')}</div>
+    </div>`;
+  }).join('');
+  main.innerHTML = `
+    <div class="crumbs"><a data-go="home">领域总览</a> / <span>易错点</span></div>
+    <div class="sec-title">
+      <h2>易错点</h2>
+      <span>${PIT.length} 个坑 · 每个坑横跨好几课，点一个只练这个坑</span>
+    </div>
+    <div class="hint-line">这些不是知识点，是「你又会错在这儿」的地方。
+      同一课做对不代表这个坑填上了——换个技能，同样的错还会犯。</div>
+    <div class="pit-list">${rows}</div>`;
+}
+
+function renderPitDetail(pitId){
+  const main = document.getElementById('main');
+  const p = PIT_BY_ID[pitId];
+  if (!p){ state.pitId = null; return renderPits(); }
+  const qs = questionsOfPit(pitId);
+  const rows = qs.map(x => {
+    const s = byId[x.sid];
+    const txt = x.q.q.length > 56 ? x.q.q.slice(0, 56) + '…' : x.q.q;
+    return `<div class="rank-row" data-pit-q="${x.sid}:${x.i}" tabindex="0" role="button">
+      <span class="rank-badge" style="background:#16202c;color:#8fa8c4;border:1px solid #253345;white-space:nowrap">练</span>
+      <span class="qres">${txt}</span>
+      <span class="dom" style="color:#6a819c">${s.n}</span>
+    </div>`;
+  }).join('');
+  main.innerHTML = `
+    <div class="crumbs"><a data-go="home">领域总览</a> / <a data-go="pit">易错点</a> / <span>${p.name}</span></div>
+    <div class="sec-title">
+      <h2>${p.name}</h2>
+      <span>${qs.length} 道题 · 涉及 ${p.skills.length} 课</span>
+    </div>
+    <div class="hint-line">${p.desc}</div>
+    <div class="sec-title" style="margin-top:22px"><h2>只练这个坑</h2><span>点一道单练，答完直接看解析</span></div>
+    <div class="slist">${rows}</div>
+    <div style="margin-top:20px"><button class="btn" data-go="pit">← 回易错点列表</button></div>`;
+}
+
+/* =======================================================================
  *  渲染总入口
  * ======================================================================= */
 function renderMain(){
@@ -1810,6 +1881,7 @@ function renderMain(){
   if (state.query.trim()) { renderSearch(); return; }
   if (state.view === 'quiz') return renderQuiz();
   if (state.view === 'mock') return renderMock();
+  if (state.view === 'pit') return state.pitId ? renderPitDetail(state.pitId) : renderPits();
   if (state.view === 'domain') return renderDomain(state.domainId);
   if (state.view === 'rank') return renderRank();
   if (state.view === 'plan') return renderPlan();
@@ -1865,6 +1937,7 @@ function syncHash(){
     else if (state.view === 'papers') h = '#papers';
     else if (state.view === 'paper') h = '#paper';
     else if (state.view === 'stats') h = '#stats';
+    else if (state.view === 'pit') h = '#pit';
   }
   if (location.hash === h) return;
   try{ history.replaceState(null, '', location.pathname + location.search + h); }
@@ -1949,6 +2022,23 @@ document.getElementById('main').addEventListener('click', e => {
     const arr = kind === 'fill' ? PAPER_FILL : PAPER_SOLVE;
     const qq = arr[+idx];
     if (qq) alert(`${unescHtml(qq.q)}\n\n答案：${unescHtml(qq.a)}\n\n${unescHtml(qq.why)}${qq.steps ? '\n\n给分点：' + unescHtml(qq.steps) : ''}`);
+    return;
+  }
+
+  // 易错点：点一个坑进去，点一道题单练
+  const pc = e.target.closest('[data-pit]');
+  if (pc){
+    state.pitId = pc.dataset.pit;
+    state.view = 'pit';
+    state.query = '';
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+  const pq3 = e.target.closest('[data-pit-q]');
+  if (pq3){
+    const [sid, i] = pq3.dataset.pitQ.split(':');
+    startSolo(sid, +i);
     return;
   }
 
@@ -2054,6 +2144,7 @@ function goTo(view){
   document.getElementById('search').value = '';
   if (view !== 'domain') state.selected = null;
   if (view !== 'quiz') state.quiz = null;
+  if (view !== 'pit') state.pitId = null;   // 进易错点先看列表
   // 从菜单点「真题 → 生成练习卷」进的是普通卷；错题卷走自己的按钮
   if (view === 'paper') { state.paperMode = 'normal'; paperCache = null; }
   render();
@@ -2182,6 +2273,10 @@ document.addEventListener('keydown', e => {
 });
 
 /* 分享给同学：手机上走系统分享，桌面复制链接 */
+document.getElementById('btn-pits').onclick = () => {
+  document.getElementById('more-wrap').classList.remove('open');
+  goTo('pit');
+};
 document.getElementById('btn-share').onclick = async () => {
   const url = location.origin === 'null' ? location.href.split('#')[0] : location.origin + location.pathname;
   try{
@@ -2399,6 +2494,7 @@ window.addEventListener('resize', () => {
   if (h === 'papers') { state.view = 'papers'; return; }
   if (h === 'paper') { state.view = 'paper'; return; }
   if (h === 'stats') { state.view = 'stats'; return; }
+  if (h === 'pit') { state.view = 'pit'; return; }
 })();
 
 document.getElementById('exam-line').textContent =
