@@ -800,11 +800,19 @@ function renderPlan(){
     </div>`;
   }).join('');
 
+  const allDone = done === list.length;
   document.getElementById('main').innerHTML = `
     <div class="crumbs"><a data-go="home">领域总览</a> / <span>学习清单</span></div>
     <div class="sec-title">
       <h2>目标：${g.n}</h2>
       <span>要 ${list.length} 个技能，已完成 ${done} 个，其中 A 级 ${aCount} 个</span>
+    </div>
+    <div class="plan-actions">
+      ${allDone
+        ? `<div class="plan-done">✓ 这个目标完成了 —— ${list.length} 个前置技能全部点亮</div>
+           <button class="btn primary" data-goal-next>挑下一个目标</button>`
+        : `<span class="plan-hint">${list.length - done} 个还没点亮</span>`}
+      <button class="btn" data-goal-clear>${allDone ? '清掉这个目标' : '不追这个目标了'}</button>
     </div>
     <div class="legend"><span>顺序是自动排的：永远先排前置，同一层里 A 级优先</span></div>
     <div class="plan-list">${items}</div>`;
@@ -903,7 +911,10 @@ function renderPanel(){
       <button class="btn" data-act="goal">设为目标</button>
     </div>
     ${q ? `<div class="p-hint">${lit ? '已通过结业挑战' : `${quizRule(QUIZ[id].length)}才能点亮${best ? ` · 你目前最好成绩 ${Math.round(best * 100)}%` : ''}`}</div>` : ''}
-    ${state.goal === id ? `<div style="font-size:11.5px;color:#7ed4a3;margin-top:6px">当前目标就是它</div>` : ''}
+    ${state.goal === id
+      ? `<div style="font-size:11.5px;color:#7ed4a3;margin-top:6px">当前目标就是它 ·
+           <a data-goal-clear style="color:#7fb0e8;cursor:pointer;text-decoration:underline">取消目标</a></div>`
+      : ''}
   `;
 }
 
@@ -1934,6 +1945,19 @@ document.getElementById('main').addEventListener('click', e => {
     return;
   }
 
+  // 目标的三个出口：取消、完成、换下一个
+  if (e.target.closest('[data-goal-clear]')){
+    state.goal = null;
+    save(); render();
+    return;
+  }
+  if (e.target.closest('[data-goal-next]')){
+    state.goal = null;
+    state.view = 'rank';
+    save(); render();
+    return;
+  }
+
   const dv = e.target.closest('[data-domain-view]');
   if (dv){ state.domainView = dv.dataset.domainView === 'list' ? 'list' : 'map'; save(); render(); return; }
 
@@ -2056,6 +2080,11 @@ document.getElementById('main').addEventListener('input', e => {
 });
 
 document.getElementById('panel').addEventListener('click', e => {
+  if (e.target.closest('[data-goal-clear]')){
+    state.goal = null;
+    save(); render();
+    return;
+  }
   const gs = e.target.closest('[data-goto-skill]');
   if (gs){ goSkill(gs.dataset.gotoSkill); return; }
   if (e.target.closest('[data-close-panel]')){
