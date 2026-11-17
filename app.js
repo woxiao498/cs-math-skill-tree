@@ -399,6 +399,9 @@ function renderDomain(domId){
     else if (sel && (ancSet.has(s.id) || kids.has(s.id))) cls += ' hl';
     else if (sel) cls += ' dimmed';
     const q = (s.q || []).length ? s.q.join('·') : '可不学';
+    // 锁定态要能一眼看出「差几个前置」，不然和「没学过」分不开
+    const missN = hardPre(s.id).filter(p => !state.lit.has(p)).length;
+    const subText = (!lit && missN) ? `差 ${missN} 个前置` : q;
     return `
       <div class="${cls}" data-skill="${s.id}"
            style="left:${p0.x}px;top:${p0.y}px;width:${W}px;height:${H}px;--nc:${d.color}">
@@ -406,7 +409,7 @@ function renderDomain(domId){
         <div class="nm">${s.n}</div>
         <div class="sub">${s.d === 'prep'
           ? `<span class="rank-badge" style="height:15px;min-width:15px;font-size:9px;background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d">基</span>`
-          : `<span class="rank-badge lv-${s.lv}" style="height:15px;min-width:15px;font-size:9px">${s.lv}</span>`}<span>${q}</span></div>
+          : `<span class="rank-badge lv-${s.lv}" style="height:15px;min-width:15px;font-size:9px">${s.lv}</span>`}<span>${subText}</span></div>
       </div>`;
   }).join('');
 
@@ -421,9 +424,15 @@ function renderDomain(domId){
       <h2 style="color:${d.color}">${d.name}</h2>
       <span>${vis.filter(s => state.lit.has(s.id)).length}/${SKILLS.filter(s => s.d === d.id).length} 已点亮 · 最远到第 ${Math.max(...vis.map(s => stepOf(s.id)))} 步${hiddenCount ? ` · 已折叠 ${hiddenCount} 个可跳过项` : ''}</span>
     </div>
-    <div class="legend">
-      <span><i></i>必须前置（不点亮就锁着）</span>
-      <span><i class="dash"></i>推荐前置（没有也能学，会更吃力）</span>
+    <div class="legend legend-state">
+      <span><i class="lg-lit"></i>已点亮</span>
+      <span><i class="lg-open"></i>能学，还没点亮</span>
+      <span><i class="lg-lock"></i>前置没齐</span>
+      <span><i class="lg-skip"></i>可跳过</span>
+    </div>
+    <div class="legend" style="margin-top:-6px">
+      <span><i></i>实线=必须前置</span>
+      <span><i class="dash"></i>虚线=推荐前置（没有也能学）</span>
       <span><span class="kbd">点节点</span> 亮出整条前置链</span>
     </div>
     <div class="legend" style="margin-top:-8px">
@@ -1257,6 +1266,7 @@ function renderMain(){
 }
 function render(){
   if (sweepLitByScore()) save();
+  syncNav();
   // 右栏只有"选中了某个技能"才有意义。首页/排行/数据/错题/真题/卷子都不需要它，
   // 白占 392px 把主区压扁（地图尤其吃亏）。
   const showPanel = !!state.selected && state.view !== 'quiz' && state.view !== 'paper';
@@ -1268,6 +1278,16 @@ function render(){
   renderProgress();
   syncHash();
   renderWrongBadge();
+}
+
+/* 顶栏当前页高亮。进哪页都长一样的话，用户只能靠面包屑那行 12px 灰字定位。 */
+function syncNav(){
+  const map = { home: 'home', domain: 'home', rank: 'rank', wrong: 'wrong',
+                papers: 'papers', paper: 'papers', stats: 'stats', plan: 'plan' };
+  const cur = state.query.trim() ? '' : (map[state.view] || '');
+  document.querySelectorAll('[data-nav]').forEach(b => {
+    b.classList.toggle('on', b.dataset.nav === cur);
+  });
 }
 
 /* 顶栏错题本角标：有几道到期了 */

@@ -54,6 +54,7 @@
     background:#101620;transition:.15s;font-size:12.5px;
   }
   .btn:hover{border-color:#3a4d68;color:var(--txt)}
+  .btn.on{background:#1c3350;border-color:#2f5480;color:#dbe9f8;font-weight:600}
   .toggle{display:flex;align-items:center;gap:6px;color:var(--txt2);cursor:pointer;user-select:none}
   .toggle input{accent-color:var(--accent)}
 
@@ -130,7 +131,7 @@
 
   .node{
     position:absolute;border-radius:9px;padding:8px 10px;cursor:pointer;
-    background:#161d28;border:1px solid #2a3646;
+    background:#161d28;border:1px solid #2f3d52;
     transition:.16s;display:flex;flex-direction:column;justify-content:center;gap:2px;
     overflow:hidden;
   }
@@ -138,20 +139,32 @@
   .node .nm{font-size:11.5px;font-weight:600;color:#dbe4f0;line-height:1.26;
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
   .node .sub{font-size:10px;color:var(--txt3);display:flex;gap:5px;align-items:center}
-  .node .dot{position:absolute;right:8px;top:8px;width:6px;height:6px;border-radius:50%;background:#2f3b4d}
+  .node .dot{position:absolute;right:9px;top:9px;width:7px;height:7px;border-radius:50%;
+    background:transparent;border:1.5px solid #52657e}
   .node.lit{background:linear-gradient(160deg,#17253a,#14202f);border-color:var(--nc);box-shadow:0 0 0 1px rgba(91,143,214,.25),0 8px 20px -12px var(--nc)}
-  .node.lit .dot{background:var(--nc);box-shadow:0 0 8px var(--nc)}
-  .node.locked .nm{color:#7d8ca0}
-  .node.locked{border-style:dashed}
+  .node.lit .dot{background:var(--nc);border-color:var(--nc);box-shadow:0 0 8px var(--nc)}
+  /* 锁定：虚线 + 名字压暗 + 红块，和「没学过」的空心圆分开 */
+  .node.locked{border-style:dashed;border-color:#26303d}
+  .node.locked .nm{color:#6b7d92}
+  .node.locked .dot{background:#b3453a;border-color:#b3453a;border-radius:2px}
   .node.sel{border-color:#8fb4e8 !important;box-shadow:0 0 0 2px rgba(143,180,232,.35),0 0 22px -4px #4d7fb8}
   .node.hl{border-color:#4d7fb8}
   .node.dimmed{opacity:.24}
-  .node.skippable{opacity:.45}
+  /* 可跳过：用斜纹底，别用 opacity —— 那在界面语言里是「禁用」，跟它「能点只是不推荐」正好反 */
+  .node.skippable{background:repeating-linear-gradient(135deg,#161d28 0 4px,#1a222e 4px 8px)}
+  .node.skippable .nm{color:#93a3b8}
   .node .ext{position:absolute;left:8px;bottom:4px;font-size:9px;color:#4a5c73}
 
   .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--txt3);margin:0 0 14px}
   .legend i{display:inline-block;width:22px;height:0;border-top:2px solid #33415a;vertical-align:middle;margin-right:5px}
   .legend i.dash{border-top-style:dashed}
+  .legend-state span{display:inline-flex;align-items:center;gap:6px;font-size:12px}
+  .legend-state i{width:14px;height:14px;border-radius:4px;display:inline-block;border:1px solid #2f3d52;background:#161d28}
+  .legend-state .lg-lit{background:#17253a;border-color:#5b8fd6}
+  .legend-state .lg-open{background:#161d28;border-color:#2f3d52}
+  .legend-state .lg-lock{border:1px dashed #4a5566;background:#101620}
+  .legend-state .lg-skip{background:repeating-linear-gradient(135deg,#161d28 0 3px,#1a222e 3px 6px)}
+  .legend-state i.lg-lock::after{content:""}
 
   /* ---------- 排行 ---------- */
   .rank-row{
@@ -215,42 +228,7 @@
   footer a{color:#6a819c}
   .kbd{font-size:10.5px;padding:1px 5px;border:1px solid #2a3646;border-radius:4px;color:#8496ad}
 
-  /* ---------- 手机 ---------- */
-  @media (max-width:640px){
-    .topbar{padding:10px 14px 8px;gap:9px}
-    .brand h1{font-size:15px}
-    .brand p{font-size:10.5px}
-    .search-wrap{min-width:100%;order:3;max-width:none}
-    .top-actions{gap:6px;font-size:11.5px}
-    .top-actions .btn{padding:5px 9px;font-size:11.5px}
-    main{padding:16px 14px 32px}
-    aside#panel{padding:16px 14px}
-    .sec-title h2{font-size:14px}
-    .dom-grid{grid-template-columns:1fr}
-    .dom-card .desc{min-height:auto}
-    .kpis{grid-template-columns:repeat(2,1fr)}
-    .kpi b{font-size:21px}
-    /* 数据页的领域行：小屏改成两行，别硬挤四列 */
-    .srow{grid-template-columns:78px 1fr 46px;
-      grid-template-areas:"n m l" "b b b";row-gap:7px;padding:10px 12px}
-    .sname{grid-area:n}
-    .smeta{grid-area:m}
-    .slit{grid-area:l}
-    .sbar{grid-area:b}
-    .qbox{padding:14px 14px}
-    .qtext{font-size:13.5px}
-    .opt{font-size:12.5px;padding:10px 11px}
-    .player iframe{height:230px}
-    .pcard{padding:10px 12px}
-    .pyear{flex:0 0 46px;font-size:17px}
-    .qr-score{font-size:50px}
-    .quiz-result{margin:26px auto}
-    /* 排行行：小屏时名字和领域一行，掌握标准和题型换到下一行，别把宽度挤爆 */
-    .rank-row{flex-wrap:wrap;row-gap:5px;align-items:center}
-    .rank-row .nm{min-width:0;flex:1 1 auto}
-    .rank-row .dom{min-width:0;font-size:10.5px}
-    .rank-row .how{flex:1 1 100%;white-space:normal;overflow:visible;text-overflow:clip;font-size:11px}
-  }
+  
 
   /* ---------- 打印练习卷 ---------- */
   .paper{background:#fff;color:#1a1a1a;border-radius:8px;padding:30px 34px;line-height:1.7;
@@ -412,11 +390,49 @@
   /* ---------- 真题 ---------- */
   .plist{display:flex;flex-direction:column;gap:9px}
   .pcard{display:flex;align-items:center;gap:14px;background:#111823;border:1px solid #22303f;border-radius:9px;padding:11px 14px;flex-wrap:wrap}
-  .pyear{font-size:20px;font-weight:800;color:#37506e;flex:0 0 62px;letter-spacing:-1px}
+  .pyear{font-size:18px;font-weight:800;color:#7f93ab;flex:0 0 62px;letter-spacing:-1px}
   .pinfo{flex:1;min-width:180px}
   .pinfo .vtitle{margin-bottom:2px}
   .pinfo .vmeta{margin-bottom:0}
-</style>
+/* ---------- 手机 ---------- */
+  /* 必须放在所有基础规则之后：同特异性下后写的赢，放前面会被覆盖掉 */
+  @media (max-width:640px){
+    .topbar{padding:10px 14px 8px;gap:9px}
+    .brand h1{font-size:15px}
+    .brand p{font-size:10.5px}
+    .search-wrap{min-width:100%;order:3;max-width:none}
+    .top-actions{gap:6px;font-size:11.5px}
+    .top-actions .btn{padding:5px 9px;font-size:11.5px}
+    main{padding:16px 14px 32px}
+    aside#panel{padding:16px 14px}
+    .sec-title h2{font-size:14px}
+    .dom-grid{grid-template-columns:1fr}
+    .dom-card .desc{min-height:auto}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .kpi b{font-size:21px}
+    /* 数据页的领域行：小屏改成两行，别硬挤四列 */
+    .srow{grid-template-columns:78px 1fr 46px;
+      grid-template-areas:"n m l" "b b b";row-gap:7px;padding:10px 12px}
+    .sname{grid-area:n}
+    .smeta{grid-area:m}
+    .slit{grid-area:l}
+    .sbar{grid-area:b}
+    .qbox{padding:14px 14px}
+    .qtext{font-size:13.5px}
+    .opt{font-size:12.5px;padding:10px 11px}
+    .player iframe{height:230px}
+    .pcard{padding:10px 12px}
+    .pyear{flex:0 0 46px;font-size:17px}
+    .qr-score{font-size:50px}
+    .quiz-result{margin:26px auto}
+    /* 排行行：小屏时名字和领域一行，掌握标准和题型换到下一行，别把宽度挤爆 */
+    .rank-row{flex-wrap:wrap;row-gap:5px;align-items:center}
+    .rank-row .nm{min-width:0;flex:1 1 auto}
+    .rank-row .dom{min-width:0;font-size:10.5px}
+    .rank-row .how{flex:1 1 100%;white-space:normal;overflow:visible;text-overflow:clip;font-size:11px}
+  }
+
+  </style>
 </head>
 <body>
 
@@ -429,12 +445,12 @@
     <input id="search" type="search" placeholder="搜知识点，比如：韦达、诱导公式、渐近线、分层抽样">
   </div>
   <div class="top-actions">
-    <button class="btn" id="btn-home">领域总览</button>
-    <button class="btn" id="btn-rank">重要度排行</button>
-    <button class="btn" id="btn-wrong">错题本<span class="badge" id="wrong-badge"></span></button>
-    <button class="btn" id="btn-papers">真题</button>
-    <button class="btn" id="btn-stats">数据</button>
-    <button class="btn" id="btn-plan">清单</button>
+    <button class="btn" id="btn-home" data-nav="home">领域总览</button>
+    <button class="btn" id="btn-rank" data-nav="rank">重要度排行</button>
+    <button class="btn" id="btn-wrong" data-nav="wrong">错题本<span class="badge" id="wrong-badge"></span></button>
+    <button class="btn" id="btn-papers" data-nav="papers">真题</button>
+    <button class="btn" id="btn-stats" data-nav="stats">数据</button>
+    <button class="btn" id="btn-plan" data-nav="plan">清单</button>
     <button class="btn" id="btn-share">分享</button>
     <button class="btn" id="btn-export">导出</button>
     <label class="btn" for="import-file">导入</label>
