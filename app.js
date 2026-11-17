@@ -359,35 +359,51 @@ function renderHome(){
       </div>`;
   }).join('');
 
+  const isNewbie = !state.lit.size && !Object.keys(state.progress).length;
+  const tid0 = pickTodaySkill();
+
+  // 第一次进来：先把规矩讲清楚，不是丢一堆卡片让人自己猜
+  const guide = isNewbie ? `
+    <div class="guide">
+      <div class="guide-h">第一次来，先看这三句</div>
+      <div class="guide-row"><b>1</b><div><span class="gt">这是一张技能树</span>
+        做完题才算点亮，点亮了才开得动后面的。</div></div>
+      <div class="guide-row"><b>2</b><div><span class="gt">你现在只需要做一件事</span>
+        ${tid0 ? `学「${byId[tid0].n}」，${QUIZ[tid0].length} 道题。` : '从下面挑一课开始。'}</div></div>
+      <div class="guide-row"><b>3</b><div><span class="gt">答错不扣分</span>
+        错题自动进错题本，过 1、3、7、15 天会提醒你再看一遍。</div></div>
+    </div>` : '';
+
   document.getElementById('main').innerHTML = `
-    <div class="sec-title">
-      <h2>${DOMAINS.length} 个领域</h2>
-      <span>从地基排到末题，不是按教材章节顺序</span>
-    </div>
-    <div class="today">
+    <div class="focus">
       ${(() => {
         const tid = pickTodaySkill();
         if (!tid){
           const litN = SKILLS.filter(s => state.lit.has(s.id)).length;
-          return `<div class="tinfo"><b>${litN ? '全都点亮了' : '没有能直接开始的课'}</b>
-            <span>${litN ? '可以从「重要度排行」回头看哪块还不熟。' : '前置还没齐，去「领域总览」从头挑一个。'}</span></div>`;
+          return `<div class="flabel">${litN ? '全都点亮了' : '没有能直接开始的课'}</div>
+            <div class="fmeta">${litN ? '可以去「重要度排行」回头看哪块还不熟。' : '前置还没齐，去下面从头挑一个。'}</div>`;
         }
         const ts = byId[tid];
         const mins = Math.max(2, Math.round(QUIZ[tid].length * 1.2));
-        return `<div class="tinfo">
-            <b>今天可以学这一课</b>
-            <span>${ts.n} · ${QUIZ[tid].length} 道题 · 约 ${mins} 分钟 · ${domById[ts.d].name}</span>
-          </div>
-          <div class="tbtn">
-            <button class="btn mini primary" data-start="${tid}">现在开始</button>
-            <button class="btn mini" data-goto-skill="${tid}">先看看这一课</button>
+        return `<div class="flabel">今天只做这一课</div>
+          <div class="fname">${ts.n}</div>
+          <div class="fmeta">${QUIZ[tid].length} 道题 · 约 ${mins} 分钟 · ${domById[ts.d].name} · 做完就点亮</div>
+          <div class="fbtns">
+            <button class="btn fprimary" data-start="${tid}">现在开始</button>
+            <button class="btn mini" data-goto-skill="${tid}">这一课教什么</button>
           </div>`;
       })()}
     </div>
+    ${guide}
+    <div class="sec-title" style="margin-top:32px">
+      <h2>全部内容</h2>
+      <span>${DOMAINS.length} 个领域 · 先把上面那一课做完，这里不用急着看</span>
+    </div>
     <div class="dom-grid">${cards}</div>
-    <div style="margin-top:26px;font-size:12px;color:#5f7085;line-height:1.9">
-      卡上的 <b style="color:#93a3b8">A/B/C/D</b> 是这块在往年卷面里的分量，不是教材要求。<br>
-      想看"每一分该花在哪"，去上面的 <b style="color:#93a3b8">重要度排行</b>。
+    <div class="p-how">
+      <b>怎么用</b>
+      从上往下学，前置点亮了才开得动。每题选完立刻给解析，讲的是错在哪。
+      卡上的 A/B/C/D 是这块在往年卷面里的分量，不是教材要求。想看清「每一分该花在哪」，去顶栏的「重要度排行」。
     </div>`;
 }
 
@@ -1828,6 +1844,23 @@ window.addEventListener('resize', () => {
     if (state.view === 'domain') render();
   }, 180);
 });
+
+/* 顶栏「更多」下拉：分享/导出/导入/显示可跳过 一个月用一次，不该和错题本平级 */
+(function(){
+  const wrap = document.getElementById('more-wrap');
+  const btn = document.getElementById('btn-more');
+  if (!wrap || !btn) return;
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    wrap.classList.toggle('open');
+  });
+  document.addEventListener('click', e => {
+    if (!wrap.contains(e.target)) wrap.classList.remove('open');
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') wrap.classList.remove('open');
+  });
+})();
 
 /* 支持 #geo 这种直接进入某个领域 */
 (function applyHash(){
