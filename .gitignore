@@ -1,7 +1,7 @@
-# 内部审阅材料，不进公开仓库
+# 内部审阅材料，一律不进公开仓库（REVIEW.md / REVIEW-ART.md / REVIEW-MATH.md ...）
 REVIEW.md
+REVIEW-*.md
 REVIEW-feedback.md
-REVIEW-ART.md
 
 # 临时文件
 _*.html
