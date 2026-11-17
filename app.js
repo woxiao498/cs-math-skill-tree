@@ -397,8 +397,7 @@ function renderDomain(domId){
     return;
   }
 
-  // 手机上一张要横滑三屏的图没什么用，换成按步分组的纵列表
-  if (window.innerWidth <= 700) return renderDomainList(d, vis, hiddenCount);
+  // 手机上也走同一张横向地图（窄屏可以左右滑），不再切成纵向列表
 
   // 按步分列
   const byStep = {};
@@ -483,6 +482,7 @@ function renderDomain(domId){
       <h2 style="color:${d.color}">${d.name}</h2>
       <span>${vis.filter(s => state.lit.has(s.id)).length}/${SKILLS.filter(s => s.d === d.id).length} 已点亮 · 最远到第 ${Math.max(...vis.map(s => stepOf(s.id)))} 步${hiddenCount ? ` · 已折叠 ${hiddenCount} 个可跳过项` : ''}</span>
     </div>
+    ${window.innerWidth <= 700 ? '<div class="swipe-hint">这张图比屏幕宽，左右滑动看全，点节点看详情。</div>' : ''}
     <div class="legend legend-state">
       <span><i class="lg-lit"></i>已点亮</span>
       <span><i class="lg-open"></i>能学，还没点亮</span>
@@ -517,53 +517,7 @@ function renderDomain(domId){
     </div>`;
 }
 
-/* 窄屏的领域视图：按步分组，一条一条往下排，点一下选中 */
-function renderDomainList(d, vis, hiddenCount){
-  const byStep = {};
-  vis.forEach(s => { const st = stepOf(s.id); (byStep[st] = byStep[st] || []).push(s); });
-  const steps = Object.keys(byStep).map(Number).sort((a, b) => a - b);
 
-  const groups = steps.map(st => {
-    const items = byStep[st].map(s => {
-      const lit = state.lit.has(s.id);
-      const unlocked = isUnlocked(s.id);
-      const q = (s.q || []).length ? s.q.join('·') : '可不学';
-      return `<div class="lcard ${lit ? 'lit' : ''} ${unlocked ? '' : 'locked'} ${s.d === 'prep' ? 'prepcard' : ''}"
-                   data-skill="${s.id}" tabindex="0" role="button">
-        <div class="ltop">
-          ${s.d === 'prep'
-            ? `<span class="rank-badge" style="background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d">基</span>`
-            : `<span class="rank-badge lv-${s.lv}">${s.lv}</span>`}
-          <span class="lnm">${s.n}</span>
-        </div>
-        <div class="lsub">${q}${lit ? ' · 已点亮' : ''}${unlocked ? '' : ' · 前置未齐'}</div>
-      </div>`;
-    }).join('');
-    return `<div class="dgroup">
-      <div class="dgroup-h">${STEP_TEXT[st] || ('第 ' + st + ' 步')}</div>
-      <div class="dgroup-body">${items}</div>
-    </div>`;
-  }).join('');
-
-  document.getElementById('main').innerHTML = `
-    <div class="crumbs"><a data-go="home">领域总览</a> / <span>${d.name}</span></div>
-    <div class="sec-title">
-      <h2 style="color:${d.color}">${d.name}</h2>
-      <span>${vis.filter(s => state.lit.has(s.id)).length}/${SKILLS.filter(s => s.d === d.id).length} 已点亮${hiddenCount ? ` · 已折叠 ${hiddenCount} 个可跳过项` : ''}</span>
-    </div>
-    <div class="legend" style="margin-bottom:12px"><span>手机上按步往下排，点一条看详情。图上那张横向地图在电脑上看更清楚。</span></div>
-    ${d.id === 'prep' ? `<div class="unsure" style="margin-bottom:14px">这一层不出独立考题，所以重要度对这里没有意义 —— 九条全都得会。</div>` : ''}
-    ${(() => {
-      const minSt = Math.min(...vis.map(s => stepOf(s.id)));
-      if (minSt <= 1) return '';
-      const entry = vis.find(s => stepOf(s.id) === minSt);
-      const outside = entry ? allPre(entry.id).filter(p => !vis.some(v => v.id === p)) : [];
-      if (!outside.length) return `<div class="hint-line">这里的技能都排在第 ${minSt} 步之后。</div>`;
-      return `<div class="hint-line">这里从第 ${minSt} 步开始，不是第一课 —— 要先会
-        ${outside.map(p => `<b data-goto-skill="${p}">${byId[p].n}</b>`).join('、')}。</div>`;
-    })()}
-    <div class="dlist">${groups}</div>`;
-}
 
 /* =======================================================================
  *  视图：重要度排行
