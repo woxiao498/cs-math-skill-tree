@@ -1632,6 +1632,27 @@ function renderStats(){
         ? `最该补的是<b>${weakest.d.name}</b>，正确率只有 ${Math.round(weakest.right / weakest.total * 100)}%。`
         : '各块正确率都在 80% 以上了，可以往上冲更难的技能。';
 
+  // 技能级最弱：领域级只说得出「三角函数 33%」，说不出「是诱导公式不行还是正弦定理不行」
+  const weakSkills = SKILLS
+    .map(s => ({ s, st: state.stats[s.id] }))
+    .filter(x => x.st && x.st.total >= 2)
+    .map(x => ({ ...x, rate: x.st.right / x.st.total }))
+    .filter(x => x.rate < 1)
+    .sort((a, b) => a.rate - b.rate || b.st.total - a.st.total)
+    .slice(0, 5);
+
+  const weakRows = weakSkills.map(x => {
+    const d = domById[x.s.d];
+    const p = Math.round(x.rate * 100);
+    return `<div class="rank-row" data-skill="${x.s.id}" tabindex="0" role="button">
+      <span class="rank-badge lv-${x.s.lv}">${x.s.lv}</span>
+      <span class="nm">${x.s.n}</span>
+      <span class="dom" style="color:${d.color}88">${d.short}</span>
+      <span class="how">做过 ${x.st.total} 题，对 ${x.st.right} 题</span>
+      <span class="qtags"><span class="weak-rate" style="color:${p >= 80 ? '#6fc79a' : p >= 60 ? '#d6a95c' : '#d08070'}">${p}%</span></span>
+    </div>`;
+  }).join('');
+
   main.innerHTML = `
     <div class="crumbs"><a data-go="home">领域总览</a> / <span>我的数据</span></div>
     <div class="sec-title"><h2>我的数据</h2><span>只统计你做过的题，没做过的领域不参与排名</span></div>
@@ -1644,6 +1665,13 @@ function renderStats(){
     </div>
 
     <div class="advice">${advice}</div>
+
+    ${weakRows ? `
+      <div class="sec-title" style="margin-top:26px">
+        <h2>最该补的几课</h2>
+        <span>按技能排的，点一行去看详情 —— 这比「三角函数 33%」具体</span>
+      </div>
+      <div class="slist">${weakRows}</div>` : ''}
 
     <div class="sec-title" style="margin-top:24px"><h2>各领域正确率</h2><span>从弱到强</span></div>
     <div class="slist">${tested.map(rowHtml).join('') || '<div class="empty" style="padding:24px">还没有任何做题记录</div>'}</div>
