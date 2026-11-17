@@ -606,17 +606,55 @@ function renderRank(){
 /* =======================================================================
  *  视图：搜索结果
  * ======================================================================= */
+/* 题库检索：题干、选项、解析都搜，「sin75」「裂项」这种词才找得到 */
+function unescHtml(s){
+  return String(s).replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+}
+
+function searchQuestions(q){
+  const out = [];
+  Object.entries(QUIZ).forEach(([sid, arr]) => {
+    arr.forEach((qq, i) => {
+      const hay = [qq.q, qq.why, ...(qq.o || [])].join(' ').toLowerCase();
+      if (hay.includes(q)) out.push({ sid, i, q: qq });
+    });
+  });
+  PAPER_FILL.forEach((qq, i) => {
+    if ([qq.q, qq.a, qq.why].join(' ').toLowerCase().includes(q)) out.push({ paper: 'fill', i, q: qq });
+  });
+  PAPER_SOLVE.forEach((qq, i) => {
+    if ([qq.q, qq.a, qq.why, qq.steps || '', qq.std || ''].join(' ').toLowerCase().includes(q))
+      out.push({ paper: 'solve', i, q: qq });
+  });
+  return out;
+}
+
+function startSolo(sid, i){
+  if (!QUIZ[sid] || !QUIZ[sid][i]) return;
+  state.quiz = { sid, i, answers: new Array(QUIZ[sid].length).fill(null), done: false, solo: true };
+  state.view = 'quiz';
+  state.query = '';
+  const inp = document.getElementById('search');
+  if (inp) inp.value = '';
+  state.selected = sid;
+  render();
+}
+
 function renderSearch(){
   const q = state.query.trim().toLowerCase();
   const hits = visibleSkills().filter(s => {
     const hay = [s.n, s.how, s.tip, domById[s.d].name, ...(s.pts || [])].join(' ').toLowerCase();
     return hay.includes(q);
   });
-  if (!hits.length){
+  const qhits = searchQuestions(q);
+
+  if (!hits.length && !qhits.length){
     main.innerHTML =
-      `<div class="empty">没搜到「${escHtml(state.query)}」<br><span>换个说法试试，比如只搜两个字</span></div>`;
+      `<div class="empty">没搜到「${escHtml(state.query)}」<br><span>换个说法试试，比如只搜两个字；搜题目内容也能找到</span></div>`;
     return;
   }
+
   const rows = hits.map(s => {
     const d = domById[s.d];
     return `<div class="rank-row" data-skill="${s.id}" tabindex="0" role="button">
@@ -626,8 +664,28 @@ function renderSearch(){
       <span class="how">${s.how}</span>
     </div>`;
   }).join('');
+
+  const qrows = qhits.slice(0, 40).map(x => {
+    const title = x.paper
+      ? (x.paper === 'fill' ? '填空题' : '解答题')
+      : byId[x.sid].n;
+    const txt = x.q.q.length > 64 ? x.q.q.slice(0, 64) + '…' : x.q.q;
+    const attr = x.paper
+      ? `data-paper-q="${x.paper}:${x.i}"`
+      : `data-search-q="${x.sid}:${x.i}"`;
+    return `<div class="rank-row" ${attr} tabindex="0" role="button">
+      <span class="rank-badge" style="background:#16202c;color:#8fa8c4;border:1px solid #253345;white-space:nowrap">题</span>
+      <span class="qres">${txt}</span>
+      <span class="dom" style="color:#6a819c">${title}</span>
+    </div>`;
+  }).join('');
+
   document.getElementById('main').innerHTML =
-    `<div class="sec-title"><h2>「${escHtml(state.query)}」的 ${hits.length} 个结果</h2></div>${rows}`;
+    `<div class="sec-title"><h2>「${escHtml(state.query)}」的结果</h2>
+       <span>${hits.length} 个技能 · ${qhits.length} 道题</span></div>
+     ${hits.length ? `<div class="rank-group">技能</div>${rows}` : ''}
+     ${qhits.length ? `<div class="rank-group" style="margin-top:18px">题目（点一道单练）</div>${qrows}
+       ${qhits.length > 40 ? `<div class="p-hint">只列出前 40 道，换个更具体的词能缩小范围</div>` : ''}` : ''}`;
 }
 
 /* =======================================================================
@@ -1722,6 +1780,22 @@ document.getElementById('main').addEventListener('click', e => {
     return;
   }
 
+  // 搜索结果：点技能跳过去，点题目单练；填空/解答题没得单练，直接把答案弹出来
+  const sq = e.target.closest('[data-search-q]');
+  if (sq){
+    const [sid, i] = sq.dataset.searchQ.split(':');
+    startSolo(sid, +i);
+    return;
+  }
+  const pq2 = e.target.closest('[data-paper-q]');
+  if (pq2){
+    const [kind, idx] = pq2.dataset.paperQ.split(':');
+    const arr = kind === 'fill' ? PAPER_FILL : PAPER_SOLVE;
+    const qq = arr[+idx];
+    if (qq) alert(`${unescHtml(qq.q)}\n\n答案：${unescHtml(qq.a)}\n\n${unescHtml(qq.why)}${qq.steps ? '\n\n给分点：' + unescHtml(qq.steps) : ''}`);
+    return;
+  }
+
   const st = e.target.closest('[data-start]');
   if (st){ startQuiz(st.dataset.start); return; }
 
@@ -2040,6 +2114,11 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
     state.qFilter = ['选择', '填空', '解答'].includes(v) ? v : '';
   }
   if (p.has('streak')) state.streak = { days: +p.get('streak'), last: localDate(0) };
+  if (p.has('q')){                       // ?q=拆项 直接看搜索结果
+    state.query = p.get('q');
+    const inp = document.getElementById('search');
+    if (inp) inp.value = state.query;
+  }
   if (p.has('paperKey')) state.paperKey = true;
   if (p.get('paperMode') === 'wrong') state.paperMode = 'wrong';
   // ?panelOpen=1 让窄屏抽屉直接弹出来，方便截图核对
