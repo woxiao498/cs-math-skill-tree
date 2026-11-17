@@ -42,7 +42,7 @@
   .brand h1{margin:0;font-size:17px;letter-spacing:.4px;font-weight:650}
   .brand h1 em{font-style:normal;color:var(--accent)}
   .brand p{margin:2px 0 0;font-size:11.5px;color:var(--txt3);letter-spacing:.3px}
-  .search-wrap{flex:1;min-width:200px;max-width:380px}
+  .search-wrap{flex:1;min-width:260px;max-width:380px}
   #search{
     width:100%;padding:7px 12px;border-radius:8px;
     background:#0e131b;border:1px solid var(--line);color:var(--txt);font-size:13px;
@@ -232,16 +232,22 @@
 
   /* ---------- 打印练习卷 ---------- */
   .paper{background:#fff;color:#1a1a1a;border-radius:8px;padding:30px 34px;line-height:1.7;
-    font-family:"Songti SC","SimSun","Microsoft YaHei",serif}
+    font-family:"Songti SC","STSong","SimSun","Noto Serif SC",serif}
   .paper .phead h2{margin:0 0 7px;font-size:19px;font-weight:700;letter-spacing:.5px}
   .paper .pmeta{display:flex;gap:18px;font-size:12px;color:#555;flex-wrap:wrap}
-  .paper .pnote{font-size:11.5px;color:#555;background:#f4f4f4;border-left:3px solid #999;
-    padding:8px 11px;margin:12px 0 20px;line-height:1.7}
-  .paper .psec{font-size:14px;font-weight:700;margin:24px 0 11px;padding-bottom:6px;border-bottom:1px solid #ddd}
-  .paper .pq{margin-bottom:13px}
-  .paper .qt{font-size:13.5px;line-height:1.75}
-  .paper .po{display:flex;flex-wrap:wrap;gap:5px 24px;margin:5px 0 0 20px;font-size:13px;color:#222}
-  .paper .pspace{height:210px}
+  /* 卷头信息栏：真卷第一页一定有这一行 */
+  .paper .pexam-info{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:#333;margin:10px 0 4px}
+  .paper .pexam-info .ul{display:inline-block;width:88px;border-bottom:1px solid #444;margin:0 0 -3px 4px}
+  .paper .pnote{font-size:11.5px;color:#333;margin:12px 0 20px;line-height:1.85}
+  .paper .pnote b{display:block;margin-bottom:2px}
+  .paper .psec{font-size:14.5px;font-weight:700;margin:28px 0 12px;padding-bottom:6px;border-bottom:1px solid #ddd}
+  .paper .pq{margin-bottom:18px}
+  .paper .qt{font-size:15px;line-height:1.8}
+  /* 选项用网格，别靠空格排 —— 每题字母到内容的间距都得一样 */
+  .paper .po{display:grid;grid-template-columns:repeat(4,1fr);column-gap:14px;row-gap:4px;
+    margin:6px 0 0;font-size:14px;color:#222}
+  .paper .po span{line-height:1.55}
+  .paper .pspace{min-height:170px;border-bottom:1px dashed #ccc;margin-bottom:12px}
   .paper .pkey{margin-top:34px;padding-top:18px;border-top:2px dashed #bbb}
   .paper .pkey h3{font-size:14px;margin:0 0 12px}
   .paper .kgroup{margin-bottom:15px;font-size:12.5px;line-height:1.85}
@@ -394,6 +400,23 @@
   .pinfo{flex:1;min-width:180px}
   .pinfo .vtitle{margin-bottom:2px}
   .pinfo .vmeta{margin-bottom:0}
+  /* ---------- 窄屏：详情做成底部抽屉 ---------- */
+  /* 基础规则必须写在媒体查询之前：display:none 要是排在后面，会把媒体查询里的 block 盖掉 */
+  .panel-grip{display:none;width:36px;height:4px;border-radius:2px;background:#3a4a5e;margin:0 auto 12px}
+  .panel-close{display:none;position:absolute;right:14px;top:12px;width:26px;height:26px;
+    align-items:center;justify-content:center;border-radius:50%;background:#1b2431;
+    border:1px solid #2b3a4d;color:#93a3b8;font-size:13px;cursor:pointer;z-index:2}
+  @media (max-width:1080px){
+    /* 选择器要写成 aside#panel，才压得过基础规则里的 aside#panel{background:rgba(...,.6)} */
+    aside#panel{position:fixed;left:0;right:0;bottom:0;max-height:72vh;overflow:auto;
+      width:auto;flex:none;border-radius:16px 16px 0 0;border-top:1px solid #2b3a4d;
+      background:#11161f;box-shadow:0 -18px 40px -20px #000;
+      transform:translateY(105%);transition:transform .24s ease;z-index:40}
+    body.panel-open aside#panel{transform:translateY(0)}
+    .panel-grip{display:block}
+    .panel-close{display:flex}
+  }
+
 /* ---------- 手机 ---------- */
   /* 必须放在所有基础规则之后：同特异性下后写的赢，放前面会被覆盖掉 */
   @media (max-width:640px){
@@ -425,6 +448,11 @@
     .pyear{flex:0 0 46px;font-size:17px}
     .qr-score{font-size:50px}
     .quiz-result{margin:26px auto}
+    /* 手机上纸边距收窄：390px 下原来内容区只剩 294px，标题折两行 */
+    .paper{padding:20px 18px}
+    .paper .phead h2{font-size:16px;letter-spacing:0}
+    .paper .qt{font-size:14px}
+    .paper .po{grid-template-columns:repeat(2,1fr)}
     /* 排行行：小屏时名字和领域一行，掌握标准和题型换到下一行，别把宽度挤爆 */
     .rank-row{flex-wrap:wrap;row-gap:5px;align-items:center}
     .rank-row .nm{min-width:0;flex:1 1 auto}

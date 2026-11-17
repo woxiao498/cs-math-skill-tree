@@ -657,6 +657,8 @@ function renderPanel(){
     : '<span style="font-size:12px;color:#5f7085">没有必修它的下游</span>';
 
   panel.innerHTML = `
+    <div class="panel-grip"></div>
+    <button class="panel-close" data-close-panel aria-label="关闭">✕</button>
     <div class="p-head">${s.n}</div>
     <div class="p-domain" style="color:${d.color}">${d.name} · 第 ${stepOf(id)} 步</div>
     <div class="p-row">
@@ -1162,11 +1164,11 @@ function renderPaper(){
         <div class="pmeta">
           <span>${isWrong ? `共 ${p.choice.length} 题` : '考试时间 120 分钟'}</span>
           ${isWrong ? '' : '<span>满分 150 分</span>'}
-          <span>生成于 ${p.stamp}</span>
         </div>
-        <div class="pnote">${isWrong
-          ? '本卷由你自己的错题组成，题目为自编练习题，非官方真题。'
-          : '本卷为自编练习题，非官方真题。一、选择题 15 小题每题 5 分共 75 分；二、填空题 5 小题每题 5 分共 25 分；三、解答题 4 小题共 50 分。'}</div>
+        <div class="pexam-info">姓名<span class="ul"></span>班级<span class="ul"></span>考号<span class="ul"></span>得分<span class="ul"></span></div>
+        <div class="pnote"><b>注意事项</b>${isWrong
+          ? '1. 本卷由你自己的错题组成，题目为自编练习题，非官方真题。'
+          : '1. 本卷为自编练习题，非官方真题。2. 一、选择题 15 小题，每题 5 分，共 75 分。3. 二、填空题 5 小题，每题 5 分，共 25 分。4. 三、解答题 4 小题，共 50 分。'}</div>
       </div>
       <div class="psec">一、选择题${isWrong ? '' : '（每小题 5 分，共 75 分）'}</div>
       ${choiceHtml}
@@ -1271,6 +1273,7 @@ function render(){
   // 白占 392px 把主区压扁（地图尤其吃亏）。
   const showPanel = !!state.selected && state.view !== 'quiz' && state.view !== 'paper';
   document.body.classList.toggle('no-panel', !showPanel);
+  if (!state.selected) document.body.classList.remove('panel-open');
   document.body.classList.toggle('quiz-mode', state.view === 'quiz');
   document.body.classList.toggle('paper-mode', state.view === 'paper');
   renderMain();
@@ -1426,6 +1429,12 @@ function quitQuiz(){
 }
 
 document.getElementById('panel').addEventListener('click', e => {
+  if (e.target.closest('[data-close-panel]')){
+    state.selected = null;
+    document.body.classList.remove('panel-open');
+    render();
+    return;
+  }
   const play = e.target.closest('[data-play]');
   if (play){ playVideo(play.dataset.play, play.dataset.slot); return; }
 
@@ -1470,14 +1479,9 @@ function selectSkill(id){
     state.view = 'domain';
   }
   if (state.view === 'domain') state.domainId = byId[id].d;
+  // 窄屏详情是底部抽屉，直接滑出来即可，不用再把页面滚到底（那样会滑过两千多像素）
+  if (window.innerWidth <= 1080) document.body.classList.add('panel-open');
   render();
-  // 窄屏上详情面板在下面，点完自动滚过去，不然像没反应
-  if (window.innerWidth <= 1080 && state.view !== 'quiz'){
-    setTimeout(() => {
-      const p = document.getElementById('panel');
-      if (p) p.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 60);
-  }
 }
 
 document.getElementById('btn-home').onclick = () => goTo('home');
@@ -1631,6 +1635,8 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   if (p.has('streak')) state.streak = { days: +p.get('streak'), last: localDate(0) };
   if (p.has('paperKey')) state.paperKey = true;
   if (p.get('paperMode') === 'wrong') state.paperMode = 'wrong';
+  // ?panelOpen=1 让窄屏抽屉直接弹出来，方便截图核对
+  if (p.has('panelOpen')) setTimeout(() => document.body.classList.add('panel-open'), 80);
   // ?demoStats=1 —— 造点做题记录，方便看数据页
   if (p.has('demoStats')){
     const demo = { s3: [3, 3], i3: [2, 3], t9: [1, 3], g8: [2, 2], r6: [1, 2], q2: [2, 2] };
