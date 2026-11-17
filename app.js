@@ -296,6 +296,23 @@ function renderProgress(){
     `已点亮 ${done} / ${vis.length} 个技能 · ${pct}%${streakTxt}`;
 }
 
+/* 今天学哪一课：从前置已齐、还没点亮的技能里挑一个（重要度优先、步数小的优先）。
+ * 首页第一眼给一个具体的小目标，比「102 个技能」有用得多。 */
+function pickTodaySkill(){
+  const ready = SKILLS.filter(s =>
+    !state.lit.has(s.id) && hasQuiz(s.id) && isUnlocked(s.id) &&
+    (state.showSkippable || s.lv !== 'D')
+  );
+  if (!ready.length) return null;
+  // 先按深浅（步数小的先），再按重要度 —— 打地基优先，别一上来就推 A 级的难题
+  ready.sort((a, b) => {
+    const sa = stepOf(a.id), sb = stepOf(b.id);
+    if (sa !== sb) return sa - sb;
+    return LV_ORDER[a.lv] - LV_ORDER[b.lv];
+  });
+  return ready[0].id;
+}
+
 /* =======================================================================
  *  视图：领域总览
  * ======================================================================= */
@@ -334,15 +351,25 @@ function renderHome(){
       <h2>${DOMAINS.length} 个领域</h2>
       <span>从地基排到末题，不是按教材章节顺序</span>
     </div>
-    <div class="startbar">
-      <div class="sbtxt">
-        <b>不知道从哪开始？</b>直接做第一课：数与式的运算，两道题，做完就算点亮。<br>
-        想先看看考试题长什么样也行——答错不扣分，只是前置没齐的话，做对也不算点亮。
-      </div>
-      <div class="sbbtns">
-        <button class="btn mini primary" data-start="p1">先做第一课</button>
-        <button class="btn mini" data-dom="set">看看集合那课</button>
-      </div>
+    <div class="today">
+      ${(() => {
+        const tid = pickTodaySkill();
+        if (!tid){
+          const litN = SKILLS.filter(s => state.lit.has(s.id)).length;
+          return `<div class="tinfo"><b>${litN ? '全都点亮了' : '没有能直接开始的课'}</b>
+            <span>${litN ? '可以从「重要度排行」回头看哪块还不熟。' : '前置还没齐，去「领域总览」从头挑一个。'}</span></div>`;
+        }
+        const ts = byId[tid];
+        const mins = Math.max(2, Math.round(QUIZ[tid].length * 1.2));
+        return `<div class="tinfo">
+            <b>今天可以学这一课</b>
+            <span>${ts.n} · ${QUIZ[tid].length} 道题 · 约 ${mins} 分钟 · ${domById[ts.d].name}</span>
+          </div>
+          <div class="tbtn">
+            <button class="btn mini primary" data-start="${tid}">现在开始</button>
+            <button class="btn mini" data-goto-skill="${tid}">先看看这一课</button>
+          </div>`;
+      })()}
     </div>
     <div class="dom-grid">${cards}</div>
     <div style="margin-top:26px;font-size:12px;color:#5f7085;line-height:1.9">
@@ -465,6 +492,16 @@ function renderDomain(domId){
       <span>步数按整棵树算 —— 某个技能的第一课可能落在别的领域，所以这里的起点不一定是第一步。</span>
     </div>
     ${domId === 'prep' ? `<div class="unsure" style="margin:0 0 14px">这一层不出独立考题，所以重要度对这里没有意义 —— 九条全都得会，缺哪条后面都会塌。</div>` : ''}
+    ${(() => {
+      // 这个领域的技能不都从第一步开始，得说清为什么，并给出跳转
+      const minSt = Math.min(...vis.map(s => stepOf(s.id)));
+      if (minSt <= 1) return '';
+      const entry = vis.find(s => stepOf(s.id) === minSt);
+      const outside = entry ? allPre(entry.id).filter(p => !vis.some(v => v.id === p)) : [];
+      if (!outside.length) return `<div class="hint-line">这里的技能都排在第 ${minSt} 步之后，因为要先会前面几步的内容。</div>`;
+      return `<div class="hint-line">这里从第 ${minSt} 步开始，不是第一课 —— 要先会
+        ${outside.map(p => `<b data-goto-skill="${p}">${byId[p].n}</b>`).join('、')}。点它就能去做。</div>`;
+    })()}
     <div class="map-wrap" style="height:${height + 40}px">
       <div class="map-inner" style="width:${width}px;height:${height}px">
         <svg class="edges" width="${width}" height="${height}">${edges}</svg>
@@ -510,6 +547,15 @@ function renderDomainList(d, vis, hiddenCount){
     </div>
     <div class="legend" style="margin-bottom:12px"><span>手机上按步往下排，点一条看详情。图上那张横向地图在电脑上看更清楚。</span></div>
     ${d.id === 'prep' ? `<div class="unsure" style="margin-bottom:14px">这一层不出独立考题，所以重要度对这里没有意义 —— 九条全都得会。</div>` : ''}
+    ${(() => {
+      const minSt = Math.min(...vis.map(s => stepOf(s.id)));
+      if (minSt <= 1) return '';
+      const entry = vis.find(s => stepOf(s.id) === minSt);
+      const outside = entry ? allPre(entry.id).filter(p => !vis.some(v => v.id === p)) : [];
+      if (!outside.length) return `<div class="hint-line">这里的技能都排在第 ${minSt} 步之后。</div>`;
+      return `<div class="hint-line">这里从第 ${minSt} 步开始，不是第一课 —— 要先会
+        ${outside.map(p => `<b data-goto-skill="${p}">${byId[p].n}</b>`).join('、')}。</div>`;
+    })()}
     <div class="dlist">${groups}</div>`;
 }
 
