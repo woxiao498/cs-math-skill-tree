@@ -54,7 +54,7 @@ const PIT = [
 
   { id: 'vector-parallel', name: '平行和垂直的坐标条件记混', skills: ['v5', 'v7'],
     desc: '平行是 x₁y₂ − x₂y₁ = 0（交叉相乘相等），垂直是 x₁x₂ + y₁y₂ = 0（点积为零）。' },
-  { id: 'double-angle', name: '和角公式中间是减号', skills: ['t7'],
+  { id: 'sum-angle', name: '和角公式中间是减号', skills: ['t7'],
     desc: 'cos(α+β) = cosαcosβ − sinαsinβ，加号对应减号。sin 那边才是同号。' },
   { id: 'div-conjugate', name: '复数除法要乘共轭', skills: ['c3'],
     desc: '(a+bi) ÷ (c+di) 要把分子分母同乘 (c−di)，让分母变成实数 c²+d²。' },

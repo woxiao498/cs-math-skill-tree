@@ -162,6 +162,7 @@ const state = {
   paperKey: false,   // 练习卷是否显示答案
   domainView: 'map', // 窄屏领域视图：map 地图 / list 竖排列表
   pitId: null,       // 当前打开的易错点
+  pitDone: {},       // { pitId: { 'sid:i': true } } 这个坑里哪些题已经做对过
   paperMode: 'normal', // normal = 随机整卷；wrong = 错题卷
   streak: { days: 0, last: null }   // 连续学习天数：做过题才算
 };
@@ -187,7 +188,7 @@ function save(){
     localStorage.setItem(KEY, JSON.stringify({
       lit: [...state.lit], goal: state.goal, showSkippable: state.showSkippable,
       wrong: state.wrong, progress: state.progress, streak: state.streak, stats: state.stats,
-      unlit: [...state.unlitSet], domainView: state.domainView,
+      unlit: [...state.unlitSet], domainView: state.domainView, pitDone: state.pitDone,
       // 模拟考也存：120 分钟的卷子刷新一下就没了，太伤人。不存 timer 本身，存剩余秒数 + 时间戳
       mock: state.mock ? {
         paper: state.mock.paper, ans: state.mock.ans,
@@ -210,6 +211,7 @@ function load(){
     state.stats = d.stats || {};
     state.unlitSet = new Set((d.unlit || []).filter(x => byId[x]));
     if (d.domainView === 'list') state.domainView = 'list';
+    if (d.pitDone && typeof d.pitDone === 'object') state.pitDone = d.pitDone;
     if (d.streak) state.streak = d.streak;
     // 恢复模拟考：按时间戳扣掉关页面期间流逝的时间，别让人关一夜还剩 120 分钟
     if (d.mock && d.mock.paper && d.mock.paper.choice && d.mock.paper.choice.length){
@@ -730,9 +732,10 @@ function searchQuestions(q){
   return out;
 }
 
-function startSolo(sid, i){
+function startSolo(sid, i, pitContext){
   if (!QUIZ[sid] || !QUIZ[sid][i]) return;
   state.quiz = { sid, i, answers: new Array(QUIZ[sid].length).fill(null), done: false, solo: true };
+  if (pitContext) state.quiz.pitContext = pitContext;   // 练完回坑页，别丢了上下文
   state.view = 'quiz';
   state.query = '';
   const inp = document.getElementById('search');
@@ -966,6 +969,12 @@ function answerQuiz(oi){
   z.answers[z.i] = oi;
   const q = QUIZ[z.sid][qi];
   scheduleWrong(z.sid, qi, oi === q.a);
+  // 从易错点进来练的，答对就记下「这个坑这一道过了」
+  if (z.solo && z.pitContext && oi === q.a){
+    state.pitDone[z.pitContext] = state.pitDone[z.pitContext] || {};
+    state.pitDone[z.pitContext][z.sid + ':' + z.i] = true;
+    save();
+  }
   // 单题订正：不自动跳，让学生看完解析再点「订正完了」
   if (z.redoOne){
     render();
@@ -1116,7 +1125,7 @@ function renderQuiz(){
         </div>
         <div class="qnav">
           ${solo
-            ? `<button class="btn primary" data-quiz-quit>返回错题本</button>`
+            ? `<button class="btn primary" data-quiz-quit>${z.pitContext ? '回这个易错点' : '返回错题本'}</button>`
             : z.redoOne
               ? `<button class="btn primary" data-quiz-next>订正完了，回去看成绩</button>`
               : `<button class="btn primary" data-quiz-next>${i === qs.length - 1 ? '看结果' : '下一题'}</button>`}
@@ -1468,10 +1477,10 @@ const PAPER_SOLVE = [
     steps: '第一问 3 分；分母 C(5,2) 3 分；分子 C(3,2) 3 分；结果 3 分',
     std: '(1) 5 个球里 3 个红，P = 3/5\n(2) 基本事件总数 C(5,2) = 10\n两个都是红球有 C(3,2) = 3 种\nP = 3/10' },
 
-  { pts: 14, q: '已知数列 {aₙ} 满足 aₙ = n·2ⁿ。(1) 求 a₁ 和 a₂；(2) 求前 n 项和 Sₙ。',
+  { pts: 12, q: '已知数列 {aₙ} 满足 aₙ = n·2ⁿ。(1) 求 a₁ 和 a₂；(2) 求前 n 项和 Sₙ。',
     a: '(1) a₁ = 2，a₂ = 8。(2) Sₙ = (n−1)·2^(n+1) + 2。',
     why: '这是「等差 × 等比」，要用错位相减：写出 Sₙ 和 2Sₙ，两式相减，中间变成等比数列，单独求和后化简。2026 年真题第 23 题考的就是它。',
-    steps: '第一问 2 分；写出 Sₙ 展开式 3 分；两边乘 2 得 2Sₙ 3 分；相减并求和 4 分；化简 2 分',
+    steps: '第一问 2 分；写出 Sₙ 展开式 3 分；两边乘 2 得 2Sₙ 2 分；相减并求和 3 分；化简 2 分',
     std: 'Sₙ = 1×2 + 2×2² + 3×2³ + … + n×2ⁿ\n2Sₙ = 1×2² + 2×2³ + … + (n−1)×2ⁿ + n×2^(n+1)\n两式相减得 −Sₙ = 2 + 2² + … + 2ⁿ − n×2^(n+1)\n= 2^(n+1) − 2 − n×2^(n+1)\n所以 Sₙ = (n−1)·2^(n+1) + 2' },
   { pts: 12, q: '已知数列 {aₙ} 中 aₙ = 1/[n(n+1)]。(1) 求 a₁ + a₂；(2) 求前 n 项和 Sₙ。',
     a: '(1) 2/3。(2) Sₙ = n/(n+1) = 1 − 1/(n+1)。',
@@ -1484,15 +1493,15 @@ const PAPER_SOLVE = [
     steps: '第一问 2 分；看出可拆成两组 3 分；等差部分求和 4 分；等比部分求和 3 分',
     std: '(1) a₁ = 1 + 1 = 2\n(2) 前 n 项和拆成两组：\n等差部分 1+3+…+(2n−1) = n²\n等比部分 1+2+…+2^(n−1) = 2ⁿ − 1\n所以 Sₙ = n² + 2ⁿ − 1' },
 
-  { pts: 14, q: '某商品每件成本 40 元，售价 60 元时每月卖 200 件；售价每降 1 元，月销量增加 20 件。设每件降价 x 元。(1) 写出月利润 y 与 x 的关系式，并写出 x 的取值范围；(2) 每件降价多少元时月利润最大，最大是多少？',
+  { pts: 12, q: '某商品每件成本 40 元，售价 60 元时每月卖 200 件；售价每降 1 元，月销量增加 20 件。设每件降价 x 元。(1) 写出月利润 y 与 x 的关系式，并写出 x 的取值范围；(2) 每件降价多少元时月利润最大，最大是多少？',
     a: '(1) y = (20−x)(200+20x) = −20x² + 200x + 4000，0 ≤ x ≤ 20。(2) x = 5 时最大，最大值 4500 元。',
     why: '每件利润 = 售价−成本 = 20−x，销量 = 200+20x。定义域：降价不能超过每件利润 20 元（到 20 元是不赔不赚）。',
-    steps: '每件利润 2 分；销量 2 分；关系式 3 分；取值范围 2 分；配方或顶点 3 分；最值 1 分；答 1 分',
+    steps: '每件利润 2 分；销量 2 分；关系式 3 分；取值范围 2 分；配方或顶点 2 分；最值 1 分',
     std: '每件利润 = (60−x) − 40 = 20 − x\n月销量 = 200 + 20x\ny = (20−x)(200+20x) = −20x² + 200x + 4000\n由 20−x ≥ 0 且 x ≥ 0，得 0 ≤ x ≤ 20\n配方：y = −20(x−5)² + 4500\n所以 x = 5 时 y 最大，最大 4500 元' },
-  { pts: 14, q: '用 40 米长的篱笆靠墙围一个矩形菜地，墙长 25 米（靠墙那面不用篱笆）。设与墙平行的边长为 x 米。(1) 写出面积 S 与 x 的关系式，并写出 x 的取值范围；(2) 求菜地的最大面积。',
+  { pts: 12, q: '用 40 米长的篱笆靠墙围一个矩形菜地，墙长 25 米（靠墙那面不用篱笆）。设与墙平行的边长为 x 米。(1) 写出面积 S 与 x 的关系式，并写出 x 的取值范围；(2) 求菜地的最大面积。',
     a: '(1) S = x(40−x)/2 = −x²/2 + 20x，0 < x ≤ 25。(2) x = 20 时最大，最大 200 平方米。',
     why: '垂直于墙的边是 (40−x)/2。取值范围受两条限制：x>0，且 x 不能超过墙长 25。顶点 x=20 落在范围内。',
-    steps: '另一边表示 3 分；面积式子 3 分；取值范围 3 分；顶点 2 分；判断顶点在范围内 2 分；答 1 分',
+    steps: '另一边表示 2 分；面积式子 3 分；取值范围 2 分；顶点 2 分；判断顶点在范围内 2 分；答 1 分',
     std: '垂直于墙的两条边共 40 − x 米，每条 (40−x)/2 米\nS = x·(40−x)/2 = −½x² + 20x\n由 x > 0 且 x ≤ 25（不能超过墙长），得 0 < x ≤ 25\n对称轴 x = 20 在范围内\nS = −½(20−20)² + 200 = 200' },
 
   { pts: 12, q: '在 △ABC 中，a = 3，b = 4，C = 60°。(1) 求边 c；(2) 求三角形的面积。',
@@ -1845,10 +1854,12 @@ function questionsOfPit(pitId){
 function renderPits(){
   const main = document.getElementById('main');
   const rows = PIT.map(p => {
-    const n = questionsOfPit(p.id).length;
-    const mastered = state.pitDone && state.pitDone[p.id];
+    const qs = questionsOfPit(p.id);
+    const rec = (state.pitDone && state.pitDone[p.id]) || {};
+    const passed = qs.filter(x => rec[x.sid + ':' + x.i]).length;
+    const mastered = qs.length > 0 && passed === qs.length;
     return `<div class="pit-card ${mastered ? 'done' : ''}" data-pit="${p.id}" tabindex="0" role="button">
-      <div class="pit-h">${mastered ? '✓ ' : ''}${p.name}<span class="pit-n">${n} 道题</span></div>
+      <div class="pit-h">${mastered ? '✓ ' : ''}${p.name}<span class="pit-n">${mastered ? '已过' : `${passed} / ${qs.length} 道`}</span></div>
       <div class="pit-d">${p.desc}</div>
       <div class="pit-s">会在这几课踩到：${p.skills.map(s => byId[s] ? byId[s].n : s).join('、')}</div>
     </div>`;
@@ -1869,11 +1880,16 @@ function renderPitDetail(pitId){
   const p = PIT_BY_ID[pitId];
   if (!p){ state.pitId = null; return renderPits(); }
   const qs = questionsOfPit(pitId);
+  const rec = (state.pitDone && state.pitDone[pitId]) || {};
+  const passed = qs.filter(x => rec[x.sid + ':' + x.i]).length;
   const rows = qs.map(x => {
     const s = byId[x.sid];
+    const ok = !!rec[x.sid + ':' + x.i];
     const txt = x.q.q.length > 56 ? x.q.q.slice(0, 56) + '…' : x.q.q;
-    return `<div class="rank-row" data-pit-q="${x.sid}:${x.i}" tabindex="0" role="button">
-      <span class="rank-badge" style="background:#16202c;color:#8fa8c4;border:1px solid #253345;white-space:nowrap">练</span>
+    return `<div class="rank-row ${ok ? 'pit-ok' : ''}" data-pit-q="${x.sid}:${x.i}" tabindex="0" role="button">
+      <span class="rank-badge" style="${ok
+        ? 'background:#12241b;color:#6fc79a;border:1px solid #2e6b4d'
+        : 'background:#16202c;color:#8fa8c4;border:1px solid #253345'};white-space:nowrap">${ok ? '✓' : '练'}</span>
       <span class="qres">${txt}</span>
       <span class="dom" style="color:#6a819c">${s.n}</span>
     </div>`;
@@ -1882,10 +1898,10 @@ function renderPitDetail(pitId){
     <div class="crumbs"><a data-go="home">领域总览</a> / <a data-go="pit">易错点</a> / <span>${p.name}</span></div>
     <div class="sec-title">
       <h2>${p.name}</h2>
-      <span>${qs.length} 道题 · 涉及 ${p.skills.length} 课</span>
+      <span>${passed} / ${qs.length} 道做过并答对 · 涉及 ${p.skills.length} 课</span>
     </div>
     <div class="hint-line">${p.desc}</div>
-    <div class="sec-title" style="margin-top:22px"><h2>只练这个坑</h2><span>点一道单练，答完直接看解析</span></div>
+    <div class="sec-title" style="margin-top:22px"><h2>只练这个坑</h2><span>点一道单练，答对会记下来，练完回到这一页</span></div>
     <div class="slist">${rows}</div>
     <div style="margin-top:20px"><button class="btn" data-go="pit">← 回易错点列表</button></div>`;
 }
@@ -2055,7 +2071,7 @@ document.getElementById('main').addEventListener('click', e => {
   const pq3 = e.target.closest('[data-pit-q]');
   if (pq3){
     const [sid, i] = pq3.dataset.pitQ.split(':');
-    startSolo(sid, +i);
+    startSolo(sid, +i, state.pitId);   // 带上坑的上下文，练完回坑页
     return;
   }
 
@@ -2172,7 +2188,10 @@ function quitQuiz(){
   const z = state.quiz;
   const solo = z && z.solo;
   const sid = z && z.sid;
+  const pit = z && z.pitContext;
   state.quiz = null;
+  // 从易错点进来的，练完回那个坑，别甩回错题本 —— 不然想接着练第二道得重新点三层
+  if (pit){ state.view = 'pit'; state.pitId = pit; render(); return; }
   if (solo){ state.view = 'wrong'; render(); return; }
   if (sid){
     state.view = 'domain';
