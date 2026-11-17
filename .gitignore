@@ -7,3 +7,6 @@ REVIEW-feedback.md
 _*.html
 _*.js
 _review.txt
+
+# 审阅会话留下的截图用临时页（t2_325078_home.html 这类），不进仓库
+t*_*.html
