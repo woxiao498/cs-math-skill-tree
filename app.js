@@ -851,6 +851,14 @@ function renderQuiz(){
 
   if (z.done){
     const pass = z.rate >= QUIT_PASS;
+    const order = z.order || qs.map((_, k) => k);
+    // 这次错了哪几题：原来只说「错题已进错题本」，学生还得自己去翻
+    const wrongOnes = order
+      .map((qi, idx) => ({ qi, idx, ok: z.answers[idx] === qs[qi].a }))
+      .filter(x => !x.ok);
+    const litNow = state.lit.has(z.sid);
+    const nextId = litNow ? pickNextStep(z.sid) : null;
+
     main.innerHTML = `
       <div class="crumbs"><a data-go="home">领域总览</a> / <span>结业挑战</span></div>
       <div class="quiz-result">
@@ -858,9 +866,21 @@ function renderQuiz(){
         <div class="qr-line">答对 ${z.right} / ${qs.length} 题</div>
         <div class="qr-msg">${pass
           ? (z.missingPre && z.missingPre.length
-              ? `题全对了，但前置还没点亮：${z.missingPre.map(m => byId[m].n).join('、')}。先把它们过了，这个技能才会亮。`
-              : `过了。${s.n} 已经点亮。`)
+              ? `题全对了，但前置还没点亮：${z.missingPre.map(m => byId[m].n).join('、')}。`
+              : `${s.n} 已经点亮。`)
           : `差一点。${quizRule(qs.length)}才算过。没过不扣任何东西，错题已经进错题本了。`}</div>
+        ${litNow ? `<div class="qr-lit">✦ ${s.n} 点亮了</div>` : ''}
+        ${nextId ? `<div class="qr-next">下一步建议学：<b data-goto-skill="${nextId}">${byId[nextId].n}</b></div>` : ''}
+        ${wrongOnes.length ? `<div class="qr-wrong">
+          <div class="qr-wrong-h">这次错的 ${wrongOnes.length} 题（点一行看为什么错）</div>
+          ${wrongOnes.map(x => `<div class="qr-wrow" data-review>
+            <span class="qn">${x.idx + 1}</span>
+            <div>
+              <div class="qt">${qs[x.qi].q}</div>
+              <div class="why">${qs[x.qi].why}</div>
+            </div>
+          </div>`).join('')}
+        </div>` : ''}
         <div class="qr-actions">
           ${(z.missingPre && z.missingPre.length)
             ? z.missingPre.map(m => `<button class="btn primary" data-goto-skill="${m}">去学「${byId[m].n}」</button>`).join('')
@@ -1479,6 +1499,10 @@ document.getElementById('main').addEventListener('click', e => {
 
   const gs = e.target.closest('[data-goto-skill]');
   if (gs){ goSkill(gs.dataset.gotoSkill); return; }
+
+  // 结算页点一行错题，展开解析
+  const wr = e.target.closest('[data-review]');
+  if (wr){ wr.classList.toggle('open'); return; }
 
   const st = e.target.closest('[data-start]');
   if (st){ startQuiz(st.dataset.start); return; }

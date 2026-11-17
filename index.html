@@ -450,6 +450,21 @@
   .qr-line{font-size:13px;color:#8ba0b8;margin:6px 0 14px}
   .qr-msg{font-size:13px;color:#b9c8d8;line-height:1.75}
   .qr-actions{display:flex;gap:10px;justify-content:center;margin-top:22px;flex-wrap:wrap}
+  /* 结算页：点亮反馈 + 下一步 + 这次错了哪几题 */
+  .qr-lit{margin-top:14px;font-size:14px;color:#6fc79a;font-weight:600;letter-spacing:.5px}
+  .qr-next{margin-top:9px;font-size:12.5px;color:#93a3b8}
+  .qr-next b{color:#7fb0e8;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+  .qr-wrong{margin:22px auto 0;max-width:560px;text-align:left}
+  .qr-wrong-h{font-size:11.5px;color:#7d92aa;margin-bottom:8px;letter-spacing:.5px}
+  .qr-wrow{display:flex;gap:10px;align-items:flex-start;padding:9px 11px;border-radius:8px;
+    background:#111a26;border:1px solid #1e2a38;margin-bottom:6px;cursor:pointer;transition:.12s}
+  .qr-wrow:hover{border-color:#2b3a4d;background:#131e2b}
+  .qr-wrow .qn{flex:0 0 20px;height:20px;border-radius:50%;background:#2a2026;color:#c08b7e;
+    font-size:11px;display:flex;align-items:center;justify-content:center;margin-top:1px}
+  .qr-wrow .qt{font-size:12px;color:#b6c6d8;line-height:1.6}
+  .qr-wrow .why{display:none;margin-top:7px;font-size:11.5px;color:#93a3b8;line-height:1.75;
+    padding-left:9px;border-left:2px solid #2b3a4d}
+  .qr-wrow.open .why{display:block}
 
   /* ---------- 错题本 ---------- */
   .wlist{display:flex;flex-direction:column;gap:11px}
