@@ -255,8 +255,12 @@ function sweepLitByScore(){
       if (state.lit.has(sid) || !byId[sid] || state.unlitSet.has(sid)) continue;
       if (!QUIZ[sid]) continue;                                          // 没有题组就别碰，否则 .length 会抛错白屏
       if (!state.progress[sid]) continue;                                // 畸形/旧导入可能是 null，别让 .best 打崩
-      if ((state.progress[sid].best || 0) < QUIT_PASS) continue;
-      if ((state.progress[sid].n || 0) !== QUIZ[sid].length) continue;   // 题量变了就重做
+      const pr = state.progress[sid];
+      const qn = QUIZ[sid].length;
+      if ((pr.n || 0) !== qn) continue;                                  // 题量变了就重做
+      // 判定比「答对题数」：旧数据没有 bestRight，用正确率乘回去兜底
+      const r = (pr.bestRight != null) ? pr.bestRight : Math.round((pr.best || 0) * qn);
+      if (r < needRight(qn)) continue;
       if (hardPre(sid).every(x => state.lit.has(x))){
         state.lit.add(sid);
         changed = true; dirty = true;
@@ -974,16 +978,19 @@ function finishQuiz(){
   const order = z.order || qs.map((_, k) => k);
   const right = z.answers.filter((a, i) => a === qs[order[i]].a).length;
   const rate = right / qs.length;
-  const p = state.progress[z.sid] || { tries: 0, best: 0, n: 0 };
+  const p = state.progress[z.sid] || { tries: 0, best: 0, n: 0, bestRight: 0 };
   const sameSize = p.n === qs.length;      // 题量变没变，决定旧成绩还能不能算
+  const need = needRight(qs.length);
   p.tries += 1;
-  // 题量变了，旧 best 必须作废：2 题全对和 5 题全对不是一回事。
-  // 这里如果还用 Math.max，就会把 best 留在 1.0 而 n 改成 5，等于自己把 n 的意义抵消掉。
+  // 题量变了，旧成绩必须作废：2 题全对和 5 题全对不是一回事。
+  // best 存正确率（给人看的），bestRight 存答对题数（给判定用的）——
+  // 判定比题数，别拿浮点正确率乘回来比，0.667 和 needRight(3)/3 这种比不稳。
   p.best = sameSize ? Math.max(p.best, rate) : rate;
+  p.bestRight = sameSize ? Math.max(p.bestRight || 0, right) : right;
   p.n = qs.length;
   // 过线了也要前置齐才点亮 —— 题会做，不代表这条链上的东西都会
   z.missingPre = hardPre(z.sid).filter(x => !state.lit.has(x));
-  if (rate >= QUIT_PASS && z.missingPre.length === 0){
+  if (right >= need && z.missingPre.length === 0){
     state.lit.add(z.sid);
     state.unlitSet.delete(z.sid);   // 重新考过了，之前的手动取消作废
   }
@@ -1003,7 +1010,7 @@ function renderQuiz(){
   const qs = QUIZ[z.sid];
 
   if (z.done){
-    const pass = z.rate >= QUIT_PASS;
+    const pass = z.right >= needRight(qs.length);
     const order = z.order || qs.map((_, k) => k);
     // 这次错了哪几题：原来只说「错题已进错题本」，学生还得自己去翻
     const wrongOnes = order
@@ -2248,10 +2255,16 @@ function applyImport(d, overwrite){
       if (!byId[k] || !QUIZ[k]) return;
       const n = QUIZ[k].length;
       const cur = state.progress[k] || { tries: 0, best: 0, n: 0 };
-      // 只合并「按当前题量考出来」的成绩，题量对不上的 best 不算数
-      const fromFile = (v.n === n) ? (v.best || 0) : 0;
-      const mine = (cur.n === n) ? (cur.best || 0) : 0;
-      state.progress[k] = { tries: (cur.tries || 0) + (v.tries || 0), best: Math.max(fromFile, mine), n };
+      // 只合并「按当前题量考出来」的成绩，题量对不上的不算数。
+      // bestRight 必须一起合，否则会出现「这台点亮了、换设备不亮」。
+      const rightOf = o => (o.bestRight != null) ? o.bestRight : Math.round((o.best || 0) * n);
+      const fileOk = v.n === n, mineOk = cur.n === n;
+      state.progress[k] = {
+        tries: (cur.tries || 0) + (v.tries || 0),
+        best: Math.max(fileOk ? (v.best || 0) : 0, mineOk ? (cur.best || 0) : 0),
+        bestRight: Math.max(fileOk ? rightOf(v) : 0, mineOk ? rightOf(cur) : 0),
+        n
+      };
     });
     Object.entries(stats).forEach(([k, v]) => {
       const cur = state.stats[k] || { right: 0, total: 0 };
