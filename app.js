@@ -1833,20 +1833,11 @@ function renderStats(){
  *  易错点：跨技能的错因网
  * ======================================================================= */
 function questionsOfPit(pitId){
-  const p = PIT_BY_ID[pitId];
-  if (!p) return [];
-  const seen = new Set();
+  // 只收显式挂了这个坑的题。按技能映射收「这一课的所有题」是错的 ——
+  // 点「端点能不能取」会带出 s3 那道纯列举的集合题，跟坑没关系。
   const out = [];
-  const push = (sid, i, q) => {
-    const key = sid + ':' + i;
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push({ sid, i, q });
-  };
-  p.skills.forEach(sid => (QUIZ[sid] || []).forEach((q, i) => push(sid, i, q)));
-  // 显式挂了 pit 的题也收进来（可能不在 skills 映射里）
   Object.entries(QUIZ).forEach(([sid, arr]) => arr.forEach((q, i) => {
-    if ((q.pit || []).includes(pitId)) push(sid, i, q);
+    if ((q.pit || []).includes(pitId)) out.push({ sid, i, q });
   }));
   return out;
 }

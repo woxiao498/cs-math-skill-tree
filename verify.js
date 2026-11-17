@@ -160,20 +160,15 @@ if (typeof PIT !== 'undefined'){
       });
     });
   }
-  // 每个坑至少能凑出 2 道题。按 questionsOfPit 的口径算（Set 去重）——
-  // 显式挂了 pit 的题如果本来就在 skills 映射里，不能重复计数。
+  // 每个坑至少要有 2 道「显式挂了它」的题 —— 一道只能算见过，不算练过。
   const pitCount = {};
-  PIT.forEach(p => {
-    const seen = new Set();
-    p.skills.forEach(sid => (QUIZ[sid] || []).forEach((q, i) => seen.add(sid + ':' + i)));
-    Object.entries(QUIZ).forEach(([sid, arr]) => arr.forEach((q, i) => {
-      if ((q.pit || []).includes(p.id)) seen.add(sid + ':' + i);
-    }));
-    pitCount[p.id] = seen.size;
-  });
+  PIT.forEach(p => { pitCount[p.id] = 0; });
+  Object.values(QUIZ).forEach(arr => arr.forEach(q => (q.pit || []).forEach(id => {
+    if (pitCount[id] != null) pitCount[id] += 1;
+  })));
   const thin = PIT.filter(p => (pitCount[p.id] || 0) < 2).map(p => `${p.id}(${pitCount[p.id]||0})`);
-  if (thin.length) warn(`这些易错点凑不出 2 道题：${thin.join(' ')}`);
-  else console.log(`  易错点 25 个，每个都至少能凑出 2 道题`);
+  if (thin.length) fail(`这些易错点没挂够 2 道题：${thin.join(' ')}`);
+  else console.log(`  易错点 ${PIT.length} 个，每个都有 ≥2 道专属题`);
 }
 
 // ---------- 报告 ----------
