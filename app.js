@@ -948,6 +948,189 @@ function renderQuiz(){
 }
 
 /* =======================================================================
+ *  模拟考：120 分钟计时，选择自动判、填空/解答自评
+ * ======================================================================= */
+function startMock(){
+  const paper = buildPaper('normal');
+  state.mock = {
+    paper,
+    ans: new Array(paper.choice.length).fill(null),
+    fillSelf: new Array(paper.fill.length).fill(null),
+    solveSelf: new Array(paper.solve.length).fill(null),
+    left: EXAM.minutes * 60,
+    done: false
+  };
+  state.view = 'mock';
+  state.selected = null;
+  state.query = '';
+  tickMock();
+  render();
+}
+
+function stopMockTimer(){
+  if (mockTimer){ clearInterval(mockTimer); mockTimer = null; }
+}
+
+let mockTimer = null;
+function tickMock(){
+  stopMockTimer();
+  if (!state.mock || state.mock.done) return;
+  mockTimer = setInterval(() => {
+    if (!state.mock || state.mock.done){ stopMockTimer(); return; }
+    state.mock.left -= 1;
+    const el = document.getElementById('mk-timer');
+    if (el) el.textContent = fmtClock(state.mock.left);
+    if (state.mock.left <= 0){
+      stopMockTimer();
+      state.mock.done = true;
+      finishMock();
+    }
+  }, 1000);
+}
+
+function fmtClock(s){
+  if (s < 0) s = 0;
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+}
+
+function mockScore(){
+  const m = state.mock, p = m.paper;
+  let pts = 0, rightChoice = 0;
+  p.choice.forEach((x, i) => { if (m.ans[i] === x.q.a){ pts += 5; rightChoice++; } });
+  p.fill.forEach((q, i) => { if (m.fillSelf[i] === true) pts += 5; });
+  p.solve.forEach((q, i) => { if (m.solveSelf[i] === true) pts += (q.pts || 12); });
+  return { pts, rightChoice };
+}
+
+function finishMock(){
+  stopMockTimer();
+  state.mock.done = true;
+  // 错的选择题进错题本，模拟卷才不是白做。choice 元素是 { sid, i, q }
+  state.mock.paper.choice.forEach((x, idx) => {
+    if (state.mock.ans[idx] !== null && state.mock.ans[idx] !== x.q.a) scheduleWrong(x.sid, x.i, false);
+  });
+  save();
+  render();
+}
+
+function quitMock(){
+  stopMockTimer();
+  const m = state.mock;
+  if (m && !m.done && m.ans.some(a => a !== null)){
+    if (!confirm('还没交卷，现在退出会丢掉这次作答。确定退出？')) return;
+  }
+  state.mock = null;
+  state.view = 'paper';
+  render();
+}
+
+function renderMock(){
+  const main = document.getElementById('main');
+  const m = state.mock;
+  if (!m){ main.innerHTML = `<div class="empty">没有正在进行的模拟考</div>`; return; }
+  const p = m.paper;
+
+  if (m.done){
+    const sc = mockScore();
+    const total = 150;
+    const pct = Math.round(sc.pts / total * 100);
+    const wrongChoice = p.choice.map((x, i) => ({ i, x })).filter(o => m.ans[o.i] !== o.x.q.a);
+    main.innerHTML = `
+      <div class="crumbs"><a data-go="home">领域总览</a> / <span>模拟考结果</span></div>
+      <div class="quiz-result">
+        <div class="qr-score ${sc.pts >= 90 ? 'ok' : 'no'}">${sc.pts}<span class="mk-of"> / ${total}</span></div>
+        <div class="qr-line">按分值折算 ${pct}%${sc.pts >= 90 ? ' · 及格线以上' : ' · 还没到 90 分线'}</div>
+        <div class="qr-msg">选择题自动判（${sc.rightChoice} / ${p.choice.length} 对，得 ${sc.rightChoice * 5} 分）；
+          填空和解答按你自己打的分算。真实考试不能自评，这个分数只能看趋势，别当成真成绩。</div>
+        ${wrongChoice.length ? `<div class="qr-wrong">
+          <div class="qr-wrong-h">选择题错这 ${wrongChoice.length} 道（点开看为什么）</div>
+          ${wrongChoice.map(o => `<div class="qr-wrow" data-review>
+            <span class="qn">${o.i + 1}</span>
+            <div><div class="qt">${o.x.q.q}</div><div class="why">${o.x.q.why}</div></div>
+          </div>`).join('')}
+        </div>` : ''}
+        <div class="qr-actions">
+          <button class="btn primary" data-mock-start>再考一次</button>
+          ${wrongChoice.length ? `<button class="btn" data-go="wrong">看错题本</button>` : ''}
+          <button class="btn" data-go="home">回总览</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const answered = m.ans.filter(a => a !== null).length;
+  const choiceHtml = p.choice.map((x, i) => {
+    const sel = m.ans[i];
+    return `<div class="mk-q">
+      <div class="mk-qt"><b>${i + 1}.</b> ${x.q.q}</div>
+      <div class="mk-opts">${x.q.o.map((o, oi) =>
+        `<div class="mk-opt ${sel === oi ? 'sel' : ''}" data-mock-opt="${i}:${oi}">
+           <span class="ml">${'ABCD'[oi]}</span><span>${o}</span>
+         </div>`).join('')}</div>
+    </div>`;
+  }).join('');
+
+  const fillHtml = p.fill.map((q, i) => {
+    const self = m.fillSelf[i];
+    return `<div class="mk-q">
+      <div class="mk-qt"><b>${p.choice.length + i + 1}.</b>（5 分）${q.q}</div>
+      <textarea class="mk-input" rows="2" placeholder="在这里写答案，写完对照下面的标准答案自己判"></textarea>
+      <details class="mk-ans"><summary>看标准答案</summary>
+        <div class="mk-ansbody"><b>${q.a}</b><div class="kwhy">${q.why}</div></div>
+      </details>
+      <div class="mk-self">
+        <span>你写对了吗？</span>
+        <button class="btn mini ${self === true ? 'on' : ''}" data-mock-fill="${i}:1">写对了</button>
+        <button class="btn mini ${self === false ? 'on' : ''}" data-mock-fill="${i}:0">写错了</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const solveHtml = p.solve.map((q, i) => {
+    const self = m.solveSelf[i];
+    return `<div class="mk-q">
+      <div class="mk-qt"><b>${p.choice.length + p.fill.length + i + 1}.</b>（${q.pts || 12} 分）${q.q}</div>
+      <textarea class="mk-input" rows="5" placeholder="写解题过程。写完展开答案，按给分点自己估分。"></textarea>
+      <details class="mk-ans"><summary>看标准答案和给分点</summary>
+        <div class="mk-ansbody"><b>${q.a}</b>
+          <div class="kwhy">${q.why}</div>
+          ${q.steps ? `<div class="ksteps">给分点：${q.steps}</div>` : ''}
+          ${q.std ? `<div class="mk-std">标准写法：\n${q.std}</div>` : ''}
+        </div>
+      </details>
+      <div class="mk-self">
+        <span>这题你能拿几分？</span>
+        <button class="btn mini ${self === 1 ? 'on' : ''}" data-mock-solve="${i}:1">基本写对了</button>
+        <button class="btn mini ${self === 0 ? 'on' : ''}" data-mock-solve="${i}:0">写不出来</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  main.innerHTML = `
+    <div class="mk-bar">
+      <div class="mk-left">
+        <span class="mk-label">剩余时间</span>
+        <span class="mk-timer" id="mk-timer">${fmtClock(m.left)}</span>
+        <span class="mk-answered">选择题已答 ${answered} / ${p.choice.length}</span>
+      </div>
+      <div class="mk-right">
+        <button class="btn mini" data-mock-exit>退出</button>
+        <button class="btn primary" data-mock-submit>交卷</button>
+      </div>
+    </div>
+    <div class="mk-sec">一、选择题（每题 5 分，共 75 分）</div>
+    ${choiceHtml}
+    <div class="mk-sec">二、填空题（每题 5 分，共 25 分）· 自评</div>
+    ${fillHtml}
+    <div class="mk-sec">三、解答题（共 50 分）· 自评</div>
+    ${solveHtml}
+    <div class="mk-end">
+      <button class="btn primary" data-mock-submit>交卷并看成绩</button>
+    </div>`;
+}
+
+/* =======================================================================
  *  错题本 + 遗忘曲线复习
  * ======================================================================= */
 function renderWrong(){
@@ -1304,6 +1487,7 @@ function renderPaper(){
       <button class="btn primary" data-paper-print>打印 / 存成 PDF</button>
       <button class="btn" data-paper-toggle>${showKey ? '只看卷子' : '显示答案'}</button>
       <button class="btn" data-paper-new>${isWrong ? '重新取一遍错题' : '换一张卷子'}</button>
+      <button class="btn" data-mock-start>开始模拟考（${EXAM.minutes} 分钟计时）</button>
     </div>
     <div class="noprint" style="font-size:12px;color:#7d92aa;line-height:1.75;margin-bottom:18px">
       ${isWrong
@@ -1424,6 +1608,7 @@ function renderMain(){
   // 搜索优先：不然做题途中搜东西，主区一动不动（以前就是这个毛病）
   if (state.query.trim()) { renderSearch(); return; }
   if (state.view === 'quiz') return renderQuiz();
+  if (state.view === 'mock') return renderMock();
   if (state.view === 'domain') return renderDomain(state.domainId);
   if (state.view === 'rank') return renderRank();
   if (state.view === 'plan') return renderPlan();
@@ -1438,7 +1623,7 @@ function render(){
   syncNav();
   // 右栏只有"选中了某个技能"才有意义。首页/排行/数据/错题/真题/卷子都不需要它，
   // 白占 392px 把主区压扁（地图尤其吃亏）。
-  const showPanel = !!state.selected && state.view !== 'quiz' && state.view !== 'paper';
+  const showPanel = !!state.selected && state.view !== 'quiz' && state.view !== 'paper' && state.view !== 'mock';
   document.body.classList.toggle('no-panel', !showPanel);
   if (!state.selected) document.body.classList.remove('panel-open');
   document.body.classList.toggle('quiz-mode', state.view === 'quiz');
@@ -1503,6 +1688,39 @@ document.getElementById('main').addEventListener('click', e => {
   // 结算页点一行错题，展开解析
   const wr = e.target.closest('[data-review]');
   if (wr){ wr.classList.toggle('open'); return; }
+
+  /* ---------- 模拟考 ---------- */
+  if (e.target.closest('[data-mock-start]')){ startMock(); return; }
+  if (e.target.closest('[data-mock-exit]')){ quitMock(); return; }
+  if (e.target.closest('[data-mock-submit]')){
+    if (!state.mock) return;
+    const m = state.mock;
+    const left = m.ans.filter(a => a !== null).length;
+    const unanswered = m.paper.choice.length - left;
+    if (unanswered > 0 && !confirm(`还有 ${unanswered} 道选择题没答，确定交卷？`)) return;
+    finishMock(); return;
+  }
+  const mo = e.target.closest('[data-mock-opt]');
+  if (mo && state.mock){
+    const [i, oi] = mo.dataset.mockOpt.split(':').map(Number);
+    state.mock.ans[i] = oi;
+    render();
+    return;
+  }
+  const mf = e.target.closest('[data-mock-fill]');
+  if (mf && state.mock){
+    const [i, v] = mf.dataset.mockFill.split(':').map(Number);
+    state.mock.fillSelf[i] = v === 1;
+    render();
+    return;
+  }
+  const ms = e.target.closest('[data-mock-solve]');
+  if (ms && state.mock){
+    const [i, v] = ms.dataset.mockSolve.split(':').map(Number);
+    state.mock.solveSelf[i] = v === 1;
+    render();
+    return;
+  }
 
   const st = e.target.closest('[data-start]');
   if (st){ startQuiz(st.dataset.start); return; }
@@ -1827,6 +2045,7 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   // ?panelOpen=1 让窄屏抽屉直接弹出来，方便截图核对
   if (p.has('panelOpen')) setTimeout(() => document.body.classList.add('panel-open'), 80);
   if (p.has('more')) setTimeout(() => document.getElementById('more-wrap').classList.add('open'), 80);
+  if (p.has('mock')) setTimeout(() => startMock(), 120);
   // ?demoStats=1 —— 造点做题记录，方便看数据页
   if (p.has('demoStats')){
     const demo = { s3: [3, 3], i3: [2, 3], t9: [1, 3], g8: [2, 2], r6: [1, 2], q2: [2, 2] };

@@ -469,6 +469,42 @@
     padding-left:9px;border-left:2px solid #2b3a4d}
   .qr-wrow.open .why{display:block}
 
+  /* ---------- 模拟考 ---------- */
+  .mk-bar{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;
+    gap:14px;flex-wrap:wrap;padding:11px 16px;margin:-6px 0 18px;border-radius:10px;
+    background:rgba(16,22,31,.94);border:1px solid #2a4364;backdrop-filter:blur(6px)}
+  .mk-left{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .mk-label{font-size:11px;color:#7d92aa;letter-spacing:1px}
+  .mk-timer{font-size:22px;font-weight:700;color:#dbe7f5;font-variant-numeric:tabular-nums;letter-spacing:1px}
+  .mk-answered{font-size:12px;color:#93a3b8}
+  .mk-right{display:flex;gap:8px}
+  .mk-sec{margin:26px 0 14px;font-size:14px;font-weight:700;color:#dbe7f5;
+    padding-bottom:7px;border-bottom:1px solid #1e2a38}
+  .mk-q{margin-bottom:20px}
+  .mk-qt{font-size:14px;color:#dbe4f0;line-height:1.8;margin-bottom:9px}
+  .mk-opts{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
+  .mk-opt{display:flex;gap:9px;align-items:flex-start;padding:9px 12px;border-radius:8px;
+    background:#111a26;border:1px solid #22303f;cursor:pointer;font-size:13px;
+    color:#c6d4e6;line-height:1.55;transition:.12s}
+  .mk-opt:hover{border-color:#3a4d68;background:#141e2b}
+  .mk-opt.sel{border-color:#5b8fd6;background:#16233a;color:#e8f0fa}
+  .mk-opt .ml{flex:0 0 16px;font-weight:700;color:#7fb0e8}
+  .mk-input{width:100%;box-sizing:border-box;background:#0f1620;border:1px solid #22303f;
+    border-radius:8px;color:#dbe4f0;font-size:13px;padding:9px 11px;font-family:inherit;
+    line-height:1.6;resize:vertical}
+  .mk-input:focus{outline:none;border-color:#3a5d8c}
+  .mk-ans{margin-top:8px;font-size:12px}
+  .mk-ans summary{cursor:pointer;color:#5b8fd6;user-select:none}
+  .mk-ansbody{margin-top:7px;padding:11px 13px;border-radius:8px;background:#0f1620;
+    border-left:2px solid #2a4364;color:#b6c6d8;line-height:1.8}
+  .mk-ansbody b{color:#e2ecf8}
+  .mk-std{white-space:pre-line;margin-top:7px;padding-top:7px;border-top:1px solid #1e2a38;
+    font-size:11.5px;color:#93a3b8}
+  .mk-self{margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:#7d92aa}
+  .mk-self .btn.on{background:#1c3350;border-color:#2f5480;color:#dbe9f8}
+  .mk-end{text-align:center;margin:30px 0 10px}
+  .mk-of{font-size:20px;color:#7d92aa;font-weight:400}
+
   /* ---------- 错题本 ---------- */
   .wlist{display:flex;flex-direction:column;gap:11px}
   .wcard{background:#111823;border:1px solid #22303f;border-left:3px solid #2f3d4f;border-radius:9px;padding:13px 15px}
