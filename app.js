@@ -499,9 +499,11 @@ function renderDomainList(d, vis, hiddenCount){
       if (minSt <= 1) return '';
       const entry = vis.find(s => stepOf(s.id) === minSt);
       const outside = entry ? allPre(entry.id).filter(p => !vis.some(v => v.id === p)) : [];
-      if (!outside.length) return `<div class="hint-line">这里的技能都排在第 ${minSt} 步之后。</div>`;
+      // 前置都点亮了这句就没意义 —— 学生看到「要先会 X」会以为还有一步没做
+      const missing = outside.filter(p => !state.lit.has(p));
+      if (!missing.length) return '';
       return `<div class="hint-line">这里从第 ${minSt} 步开始，不是第一课 —— 要先会
-        ${outside.map(p => `<b data-goto-skill="${p}">${byId[p].n}</b>`).join('、')}。</div>`;
+        ${missing.map(p => `<b data-goto-skill="${p}">${byId[p].n}</b>`).join('、')}。</div>`;
     })()}
     <div class="dlist">${groups}</div>`;
 }
@@ -629,9 +631,11 @@ function renderDomain(domId){
       if (minSt <= 1) return '';
       const entry = vis.find(s => stepOf(s.id) === minSt);
       const outside = entry ? allPre(entry.id).filter(p => !vis.some(v => v.id === p)) : [];
-      if (!outside.length) return `<div class="hint-line">这里的技能都排在第 ${minSt} 步之后，因为要先会前面几步的内容。</div>`;
+      // 前置都点亮了这句就没意义 —— 学生看到「要先会 X」会以为还有一步没做
+      const missing = outside.filter(p => !state.lit.has(p));
+      if (!missing.length) return '';
       return `<div class="hint-line">这里从第 ${minSt} 步开始，不是第一课 —— 要先会
-        ${outside.map(p => `<b data-goto-skill="${p}">${byId[p].n}</b>`).join('、')}。点它就能去做。</div>`;
+        ${missing.map(p => `<b data-goto-skill="${p}">${byId[p].n}</b>`).join('、')}。点它就能去做。</div>`;
     })()}
     <div class="map-wrap" style="height:${height + 40}px">
       <div class="map-inner" style="width:${width}px;height:${height}px">
@@ -1123,6 +1127,11 @@ function renderQuiz(){
           <b>${ok ? '对了' : '错了'}</b> · 正确答案是 ${'ABCD'[q.a]}（${q.o[q.a]}）
           <div class="fb-why">${q.why}</div>
         </div>
+        ${!ok && (q.pit || []).length && PIT_BY_ID[q.pit[0]]
+          ? `<div class="pit-hint">这题踩的是「<b>${PIT_BY_ID[q.pit[0]].name}</b>」这个坑 ——
+              同一课做对不代表它填上了，换个技能还会犯。
+              <a data-goto-pit="${q.pit[0]}">单独练这个坑 →</a></div>`
+          : ''}
         <div class="qnav">
           ${solo
             ? `<button class="btn primary" data-quiz-quit>${z.pitContext ? '回这个易错点' : '返回错题本'}</button>`
@@ -1139,22 +1148,40 @@ function renderQuiz(){
 /* =======================================================================
  *  模拟考：120 分钟计时，选择自动判、填空/解答自评
  * ======================================================================= */
-function startMock(){
-  const paper = buildPaper('normal');
+/* 地基卷：只从「已点亮」或「前置已齐」的技能里抽 10 道。
+ * 整卷模拟考一上来就是 sin2α，学了三课的人只会觉得白学了 —— 先给一张做得到的。 */
+function buildBasicPaper(){
+  const pool = [];
+  Object.entries(QUIZ).forEach(([sid, arr]) => {
+    if (!byId[sid]) return;
+    if (!(state.lit.has(sid) || isUnlocked(sid))) return;
+    arr.forEach((q, i) => pool.push({ sid, i, q }));
+  });
+  for (let i = pool.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return { mode: 'basic', choice: pool.slice(0, 10), fill: [], solve: [], stamp: localDate(0) };
+}
+
+function startMock(mode){
+  const basic = mode === 'basic';
+  const paper = basic ? buildBasicPaper() : buildPaper('normal');
   state.mock = {
     paper,
+    basic,
     ans: new Array(paper.choice.length).fill(null),
     fillSelf: new Array(paper.fill.length).fill(null),
     solveSelf: new Array(paper.solve.length).fill(null),
     fillText: new Array(paper.fill.length).fill(''),
     solveText: new Array(paper.solve.length).fill(''),
-    left: EXAM.minutes * 60,
+    left: basic ? 0 : EXAM.minutes * 60,
     done: false
   };
   state.view = 'mock';
   state.selected = null;
   state.query = '';
-  tickMock();
+  if (!basic) tickMock();
   render();
 }
 
@@ -1229,16 +1256,21 @@ function renderMock(){
 
   if (m.done){
     const sc = mockScore();
-    const total = 150;
+    const basic = !!m.basic;
+    const total = basic ? p.choice.length * 5 : 150;
+    const passLine = basic ? Math.ceil(total * 0.6) : 90;
     const pct = Math.round(sc.pts / total * 100);
     const wrongChoice = p.choice.map((x, i) => ({ i, x })).filter(o => m.ans[o.i] !== o.x.q.a);
     main.innerHTML = `
-      <div class="crumbs"><a data-go="home">领域总览</a> / <span>模拟考结果</span></div>
+      <div class="crumbs"><a data-go="home">领域总览</a> / <span>${basic ? '地基卷结果' : '模拟考结果'}</span></div>
       <div class="quiz-result">
-        <div class="qr-score ${sc.pts >= 90 ? 'ok' : 'no'}">${sc.pts}<span class="mk-of"> / ${total}</span></div>
-        <div class="qr-line">按分值折算 ${pct}%${sc.pts >= 90 ? ' · 及格线以上' : ' · 还没到 90 分线'}</div>
-        <div class="qr-msg">选择题自动判（${sc.rightChoice} / ${p.choice.length} 对，得 ${sc.rightChoice * 5} 分）；
-          填空和解答按你自己打的分算。真实考试不能自评，这个分数只能看趋势，别当成真成绩。</div>
+        <div class="qr-score ${sc.pts >= passLine ? 'ok' : 'no'}">${sc.pts}<span class="mk-of"> / ${total}</span></div>
+        <div class="qr-line">答对 ${sc.rightChoice} / ${p.choice.length} 道${basic
+          ? (sc.pts >= passLine ? ' · 这些课你都过了' : ` · 及格线是 ${passLine} 分`)
+          : (sc.pts >= passLine ? ' · 及格线以上' : ' · 还没到 90 分线')}</div>
+        <div class="qr-msg">${basic
+          ? '这张卷子只从你点亮过、或者前置已经齐了的课里出题，所以它测的是「学过的会不会」，不是「能考几分」。'
+          : `选择题自动判（${sc.rightChoice} / ${p.choice.length} 对，得 ${sc.rightChoice * 5} 分）；填空和解答按你自己打的分算。真实考试不能自评，这个分数只能看趋势，别当成真成绩。`}</div>
         ${wrongChoice.length ? `<div class="qr-wrong">
           <div class="qr-wrong-h">选择题错这 ${wrongChoice.length} 道（点开看为什么）</div>
           ${wrongChoice.map(o => `<div class="qr-wrow" data-review>
@@ -1247,7 +1279,7 @@ function renderMock(){
           </div>`).join('')}
         </div>` : ''}
         <div class="qr-actions">
-          <button class="btn primary" data-mock-start>再考一次</button>
+          <button class="btn primary" data-mock-start="${m.basic ? 'basic' : 'full'}">再考一次</button>
           ${wrongChoice.length ? `<button class="btn" data-go="wrong">看错题本</button>` : ''}
           <button class="btn" data-go="home">回总览</button>
         </div>
@@ -1306,8 +1338,10 @@ function renderMock(){
   main.innerHTML = `
     <div class="mk-bar">
       <div class="mk-left">
-        <span class="mk-label">剩余时间</span>
-        <span class="mk-timer" id="mk-timer">${fmtClock(m.left)}</span>
+        ${m.basic
+          ? `<span class="mk-label">地基卷 · 不计时 · 只出你学过的</span>`
+          : `<span class="mk-label">剩余时间</span>
+             <span class="mk-timer" id="mk-timer">${fmtClock(m.left)}</span>`}
         <span class="mk-answered">选择题已答 ${answered} / ${p.choice.length}</span>
       </div>
       <div class="mk-right">
@@ -1315,12 +1349,13 @@ function renderMock(){
         <button class="btn primary" data-mock-submit>交卷</button>
       </div>
     </div>
-    <div class="mk-sec">一、选择题（每题 5 分，共 75 分）</div>
+    <div class="mk-sec">一、选择题（每题 5 分，共 ${p.choice.length * 5} 分）</div>
     ${choiceHtml}
-    <div class="mk-sec">二、填空题（每题 5 分，共 25 分）· 自评</div>
-    ${fillHtml}
-    <div class="mk-sec">三、解答题（共 50 分）· 自评</div>
-    ${solveHtml}
+    ${m.basic ? '' : `
+      <div class="mk-sec">二、填空题（每题 5 分，共 25 分）· 自评</div>
+      ${fillHtml}
+      <div class="mk-sec">三、解答题（共 50 分）· 自评</div>
+      ${solveHtml}`}
     <div class="mk-end">
       <button class="btn primary" data-mock-submit>交卷并看成绩</button>
     </div>`;
@@ -1682,11 +1717,12 @@ function renderPaper(){
 
   main.innerHTML = `
     <div class="crumbs noprint"><a data-go="home">领域总览</a> / <span>${isWrong ? '错题卷' : '打印练习卷'}</span></div>
-    <div class="noprint" style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px">
+    <div class="p-actions noprint" style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px">
       <button class="btn primary" data-paper-print>打印 / 存成 PDF</button>
       <button class="btn" data-paper-toggle>${showKey ? '只看卷子' : '显示答案'}</button>
       <button class="btn" data-paper-new>${isWrong ? '重新取一遍错题' : '换一张卷子'}</button>
-      <button class="btn" data-mock-start>开始模拟考（${EXAM.minutes} 分钟计时）</button>
+      <button class="btn" data-mock-start="basic">先做地基 10 题（不计时）</button>
+      <button class="btn" data-mock-start="full">整卷模拟考（${EXAM.minutes} 分钟）</button>
     </div>
     <div class="noprint" style="font-size:12px;color:#7d92aa;line-height:1.75;margin-bottom:18px">
       ${isWrong
@@ -1811,7 +1847,7 @@ function renderStats(){
     ${weakRows ? `
       <div class="sec-title" style="margin-top:26px">
         <h2>最该补的几课</h2>
-        <span>按技能排的，点一行去看详情 —— 这比「三角函数 33%」具体</span>
+        <span>按技能排的，点一行去看详情</span>
       </div>
       <div class="slist">${weakRows}</div>` : ''}
 
@@ -2001,7 +2037,7 @@ document.getElementById('main').addEventListener('click', e => {
   if (wr){ wr.classList.toggle('open'); return; }
 
   /* ---------- 模拟考 ---------- */
-  if (e.target.closest('[data-mock-start]')){ startMock(); return; }
+  if (e.target.closest('[data-mock-start]')){ startMock(e.target.closest('[data-mock-start]').dataset.mockStart); return; }
   if (e.target.closest('[data-mock-exit]')){ quitMock(); return; }
   if (e.target.closest('[data-mock-submit]')){
     if (!state.mock) return;
@@ -2046,6 +2082,18 @@ document.getElementById('main').addEventListener('click', e => {
     const arr = kind === 'fill' ? PAPER_FILL : PAPER_SOLVE;
     const qq = arr[+idx];
     if (qq) alert(`${unescHtml(qq.q)}\n\n答案：${unescHtml(qq.a)}\n\n${unescHtml(qq.why)}${qq.steps ? '\n\n给分点：' + unescHtml(qq.steps) : ''}`);
+    return;
+  }
+
+  // 答错时那句「踩的是哪个坑」点进来的
+  const gp = e.target.closest('[data-goto-pit]');
+  if (gp){
+    state.quiz = null;
+    state.pitId = gp.dataset.gotoPit;
+    state.view = 'pit';
+    state.query = '';
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     return;
   }
 
@@ -2449,7 +2497,7 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   // ?panelOpen=1 让窄屏抽屉直接弹出来，方便截图核对
   if (p.has('panelOpen')) setTimeout(() => document.body.classList.add('panel-open'), 80);
   if (p.has('more')) setTimeout(() => document.getElementById('more-wrap').classList.add('open'), 80);
-  if (p.has('mock')) setTimeout(() => startMock(), 120);
+  if (p.has('mock')) setTimeout(() => startMock(p.get('mock') === 'basic' ? 'basic' : 'full'), 120);
   // ?demoStats=1 —— 造点做题记录，方便看数据页
   if (p.has('demoStats')){
     const demo = { s3: [3, 3], i3: [2, 3], t9: [1, 3], g8: [2, 2], r6: [1, 2], q2: [2, 2] };
