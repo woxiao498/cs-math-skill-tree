@@ -214,6 +214,7 @@ function sweepLitByScore(){
     changed = false;
     for (const sid of Object.keys(state.progress)){
       if (state.lit.has(sid) || !byId[sid] || state.unlitSet.has(sid)) continue;
+      if (!QUIZ[sid]) continue;                                          // 没有题组就别碰，否则 .length 会抛错白屏
       if ((state.progress[sid].best || 0) < QUIT_PASS) continue;
       if ((state.progress[sid].n || 0) !== QUIZ[sid].length) continue;   // 题量变了就重做
       if (hardPre(sid).every(x => state.lit.has(x))){
@@ -403,7 +404,9 @@ function renderDomain(domId){
            style="left:${p0.x}px;top:${p0.y}px;width:${W}px;height:${H}px;--nc:${d.color}">
         <span class="dot"></span>
         <div class="nm">${s.n}</div>
-        <div class="sub"><span class="rank-badge lv-${s.lv}" style="height:15px;min-width:15px;font-size:9px">${s.lv}</span><span>${q}</span></div>
+        <div class="sub">${s.d === 'prep'
+          ? `<span class="rank-badge" style="height:15px;min-width:15px;font-size:9px;background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d">基</span>`
+          : `<span class="rank-badge lv-${s.lv}" style="height:15px;min-width:15px;font-size:9px">${s.lv}</span>`}<span>${q}</span></div>
       </div>`;
   }).join('');
 
@@ -520,7 +523,7 @@ function renderRank(){
   const prepList = vis.filter(s => s.d === 'prep');
   if (prepList.length){
     html += `<div class="rank-group"><span class="rank-badge" style="background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d;white-space:nowrap">地基</span>
-      不单独占分，但缺哪条后面都会塌 —— 这 9 条不按 A/B/C/D 排，全都要会</div>`;
+      不单独占分，但缺哪条后面都会塌 —— 这 ${prepList.length} 条不按 A/B/C/D 排，全都要会</div>`;
     html += prepList.map(rankRow).join('');
   }
 
@@ -588,7 +591,9 @@ function renderPlan(){
     return `<div class="plan-item ${lit ? 'done' : ''}" data-skill="${id}">
       <div class="no">${lit ? '✓' : i + 1}</div>
       <div class="body">
-        <div class="t">${s.n} <span class="rank-badge lv-${s.lv}" style="height:15px;min-width:15px;font-size:9px">${s.lv}</span></div>
+        <div class="t">${s.n} ${s.d === 'prep'
+          ? `<span class="rank-badge" style="height:15px;min-width:15px;font-size:9px;background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d">基</span>`
+          : `<span class="rank-badge lv-${s.lv}" style="height:15px;min-width:15px;font-size:9px">${s.lv}</span>`}</div>
         <div class="d">${d.name} · 第 ${stepOf(id)} 步 · ${(s.q || []).join('/') || '可不学'}</div>
       </div>
     </div>`;
@@ -749,10 +754,13 @@ function finishQuiz(){
   const order = z.order || qs.map((_, k) => k);
   const right = z.answers.filter((a, i) => a === qs[order[i]].a).length;
   const rate = right / qs.length;
-  const p = state.progress[z.sid] || { tries: 0, best: 0 };
+  const p = state.progress[z.sid] || { tries: 0, best: 0, n: 0 };
+  const sameSize = p.n === qs.length;      // 题量变没变，决定旧成绩还能不能算
   p.tries += 1;
-  p.best = Math.max(p.best, rate);
-  p.n = qs.length;            // 记下这次是按几道题考出来的，题量变了旧成绩就不算
+  // 题量变了，旧 best 必须作废：2 题全对和 5 题全对不是一回事。
+  // 这里如果还用 Math.max，就会把 best 留在 1.0 而 n 改成 5，等于自己把 n 的意义抵消掉。
+  p.best = sameSize ? Math.max(p.best, rate) : rate;
+  p.n = qs.length;
   // 过线了也要前置齐才点亮 —— 题会做，不代表这条链上的东西都会
   z.missingPre = hardPre(z.sid).filter(x => !state.lit.has(x));
   if (rate >= QUIT_PASS && z.missingPre.length === 0){
@@ -910,7 +918,7 @@ function renderPapers(){
         <div class="vmeta">${escHtml(v.up)} · ${v.dur}${p.note ? ' · ' + p.note : ''}</div>
       </div>
       <div class="vbtns">
-        <button class="btn mini" data-play="${p.bv}">在本页看</button>
+        <button class="btn mini" data-play="${p.bv}" data-slot="paper-player">在本页看</button>
         <a class="btn mini" href="https://www.bilibili.com/video/${p.bv}" target="_blank" rel="noopener noreferrer">去 B站</a>
       </div>
     </div>`;
@@ -925,12 +933,12 @@ function renderPapers(){
       <div style="margin-top:9px"><button class="btn mini primary" data-go="paper">生成练习卷</button></div>
     </div>
     <div class="plist">${rows}</div>
-    <div id="player-slot"></div>`;
+    <div id="paper-player"></div>`;
 }
 
 /* 点「在本页看」才插 iframe，避免一进页面就加载一堆播放器 */
-function playVideo(bv){
-  const slot = document.getElementById('player-slot');
+function playVideo(bv, slotId){
+  const slot = document.getElementById(slotId || 'player-slot');
   if (!slot) return;
   slot.innerHTML = `
     <div class="player">
@@ -947,8 +955,6 @@ function playVideo(bv){
  *  15 选择 + 5 填空 + 4 解答，150 分 120 分钟，跟真卷结构一致，可打印存 PDF。
  *  卷子上会写明是自编题，不是原卷。
  * ======================================================================= */
-const PAPER_PLAN_DROPPED = true;   // 原来那套 15×5+5×5+4×12=148，和 150 对不上，已废弃
-
 /* 填空题和解答题题库：卷子上要凑齐三种题型，光靠四选一不够 */
 const PAPER_FILL = [
   { q: '计算：8^(2/3) = ______', a: '4', why: '先开三次方 8^(1/3)=2，再平方得 4。' },
@@ -1016,17 +1022,68 @@ function buildPaper(mode){
   // 先按技能打散，保证 15 道题尽量来自不同技能
   const bySid = {};
   all.forEach(x => { (bySid[x.sid] = bySid[x.sid] || []).push(x); });
-  const sids = Object.keys(bySid);
-  for (let i = sids.length - 1; i > 0; i--){
-    const j = Math.floor(Math.random() * (i + 1));
-    [sids[i], sids[j]] = [sids[j], sids[i]];
+  // 按领域分值分配这 15 道题：解析几何 3 道、三角 2 道……这样卷子才像真卷。
+  // 单按 A/B/C 加权不够——B 级有 70 个技能，数量会压过权重，B 还是占到六成多。
+  const DOM_W = { prep: 9, set: 7, ineq: 9, func: 14, explog: 8, trig: 21, seq: 21, vec: 11, geo: 32, prob: 9, cplx: 8 };
+  const totalW = Object.values(DOM_W).reduce((a, b) => a + b, 0);
+  const bases = {};
+  let baseSum = 0;
+  const fracs = [];
+  for (const [d, w] of Object.entries(DOM_W)){
+    const exact = (w / totalW) * 15;
+    bases[d] = Math.floor(exact);
+    baseSum += bases[d];
+    fracs.push([d, exact - Math.floor(exact)]);
   }
+  fracs.sort((a, b) => b[1] - a[1]);            // 最大余数法凑够 15
+  for (let i = 0; i < 15 - baseSum; i++) bases[fracs[i % fracs.length][0]] += 1;
+
+  const byDom = {};
+  for (const sid of Object.keys(bySid)){
+    const d = byId[sid] ? byId[sid].d : null;
+    if (d) (byDom[d] = byDom[d] || []).push(sid);
+  }
+
   const picks = [];
-  for (const sid of sids){
-    if (picks.length >= 15) break;
-    const pool = bySid[sid];
-    // 每个技能随机抽一道，不能老抽第 0 道，不然新补的题永远进不了卷子
-    picks.push(pool[Math.floor(Math.random() * pool.length)]);
+  const taken = new Set();
+  for (const [d, n] of Object.entries(bases)){
+    if (n <= 0) continue;
+    // 领域内再按 lv 加权（A 3 票、B 2 票、C 1 票）：
+    // 只按领域随机抽的话，A 级技能在每个领域里本来就少，抽出来还是 B 占大头。
+    const tickets = [];
+    (byDom[d] || []).forEach(sid => {
+      const l = byId[sid] ? byId[sid].lv : 'C';
+      const w = l === 'A' ? 3 : l === 'B' ? 2 : 1;
+      for (let i = 0; i < w; i++) tickets.push(sid);
+    });
+    for (let i = tickets.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [tickets[i], tickets[j]] = [tickets[j], tickets[i]];
+    }
+    const usedHere = new Set();
+    let got = 0;
+    for (const sid of tickets){
+      if (got >= n || picks.length >= 15) break;
+      if (usedHere.has(sid)) continue;
+      usedHere.add(sid);
+      taken.add(sid);
+      got++;
+      const pool = bySid[sid];
+      picks.push(pool[Math.floor(Math.random() * pool.length)]);
+    }
+  }
+  // 某个领域题不够时，从剩下的技能里补满 15
+  if (picks.length < 15){
+    const rest = Object.keys(bySid).filter(sid => !taken.has(sid));
+    for (let i = rest.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [rest[i], rest[j]] = [rest[j], rest[i]];
+    }
+    for (const sid of rest){
+      if (picks.length >= 15) break;
+      const pool = bySid[sid];
+      picks.push(pool[Math.floor(Math.random() * pool.length)]);
+    }
   }
 
   const pickN = (arr, n) => {
@@ -1248,7 +1305,7 @@ document.getElementById('main').addEventListener('click', e => {
     return;
   }
   const play = e.target.closest('[data-play]');
-  if (play){ playVideo(play.dataset.play); return; }
+  if (play){ playVideo(play.dataset.play, play.dataset.slot); return; }
 
   const st = e.target.closest('[data-start]');
   if (st){ startQuiz(st.dataset.start); return; }
@@ -1295,6 +1352,7 @@ document.getElementById('main').addEventListener('click', e => {
     state.wrong = [];
     state.progress = {};
     state.stats = {};
+    state.unlitSet = new Set();
     state.goal = null;
     state.streak = { days: 0, last: null };
     save(); render();
@@ -1349,7 +1407,7 @@ function quitQuiz(){
 
 document.getElementById('panel').addEventListener('click', e => {
   const play = e.target.closest('[data-play]');
-  if (play){ playVideo(play.dataset.play); return; }
+  if (play){ playVideo(play.dataset.play, play.dataset.slot); return; }
 
   const chip = e.target.closest('[data-skill]');
   if (chip && !e.target.closest('[data-act]')){ selectSkill(chip.dataset.skill); return; }
@@ -1458,7 +1516,7 @@ document.getElementById('tgl-skip').addEventListener('change', e => {
 
 document.getElementById('btn-export').onclick = () => {
   const blob = new Blob([JSON.stringify({
-    v: 2,
+    v: 3,
     lit: [...state.lit], goal: state.goal,
     wrong: state.wrong, progress: state.progress,
     stats: state.stats, streak: state.streak,
@@ -1492,8 +1550,13 @@ function applyImport(d, overwrite){
       if (!state.wrong.some(o => o.sid === w.sid && o.qi === w.qi)) state.wrong.push(w);
     });
     Object.entries(prog).forEach(([k, v]) => {
-      const cur = state.progress[k] || { tries: 0, best: 0 };
-      state.progress[k] = { tries: (cur.tries || 0) + (v.tries || 0), best: Math.max(cur.best || 0, v.best || 0) };
+      if (!byId[k] || !QUIZ[k]) return;
+      const n = QUIZ[k].length;
+      const cur = state.progress[k] || { tries: 0, best: 0, n: 0 };
+      // 只合并「按当前题量考出来」的成绩，题量对不上的 best 不算数
+      const fromFile = (v.n === n) ? (v.best || 0) : 0;
+      const mine = (cur.n === n) ? (cur.best || 0) : 0;
+      state.progress[k] = { tries: (cur.tries || 0) + (v.tries || 0), best: Math.max(fromFile, mine), n };
     });
     Object.entries(stats).forEach(([k, v]) => {
       const cur = state.stats[k] || { right: 0, total: 0 };
