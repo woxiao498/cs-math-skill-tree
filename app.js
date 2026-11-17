@@ -160,6 +160,7 @@ const state = {
   stats: {},         // { sid: { right, total } } 用来算各领域正确率
   unlitSet: new Set(), // 用户手动取消过点亮的技能，sweep 不许再自动加回去
   paperKey: false,   // 练习卷是否显示答案
+  domainView: 'map', // 窄屏领域视图：map 地图 / list 竖排列表
   paperMode: 'normal', // normal = 随机整卷；wrong = 错题卷
   streak: { days: 0, last: null }   // 连续学习天数：做过题才算
 };
@@ -185,7 +186,7 @@ function save(){
     localStorage.setItem(KEY, JSON.stringify({
       lit: [...state.lit], goal: state.goal, showSkippable: state.showSkippable,
       wrong: state.wrong, progress: state.progress, streak: state.streak, stats: state.stats,
-      unlit: [...state.unlitSet]
+      unlit: [...state.unlitSet], domainView: state.domainView
     }));
   }catch(e){ /* file:// 下个别浏览器禁写，忽略，进度仍存在内存里 */ }
 }
@@ -201,6 +202,7 @@ function load(){
     state.progress = d.progress || {};
     state.stats = d.stats || {};
     state.unlitSet = new Set((d.unlit || []).filter(x => byId[x]));
+    if (d.domainView === 'list') state.domainView = 'list';
     if (d.streak) state.streak = d.streak;
   }catch(e){}
 }
@@ -418,6 +420,63 @@ function renderHome(){
     </div>`;
 }
 
+/* 窄屏的领域视图：按步分组往下排。
+ * 和地图并存，由 state.domainView 切换 —— 地图能看前置关系，列表能一眼看全，各有各的用处。 */
+function domainViewToggle(){
+  if (window.innerWidth > 1080) return '';
+  const toList = state.domainView !== 'list';
+  return `<button class="btn mini" data-domain-view="${toList ? 'list' : 'map'}" style="margin-left:auto">${toList ? '换成竖排列表' : '换成地图'}</button>`;
+}
+
+function renderDomainList(d, vis, hiddenCount){
+  const byStep = {};
+  vis.forEach(s => { const st = stepOf(s.id); (byStep[st] = byStep[st] || []).push(s); });
+  const steps = Object.keys(byStep).map(Number).sort((a, b) => a - b);
+
+  const groups = steps.map(st => {
+    const items = byStep[st].map(s => {
+      const lit = state.lit.has(s.id);
+      const unlocked = isUnlocked(s.id);
+      const q = (s.q || []).length ? s.q.join('·') : '可不学';
+      const missN = hardPre(s.id).filter(p => !state.lit.has(p)).length;
+      const subText = (!lit && missN) ? `差 ${missN} 个前置` : q;
+      return `<div class="lcard ${lit ? 'lit' : ''} ${unlocked ? '' : 'locked'}"
+                   data-skill="${s.id}" tabindex="0" role="button">
+        <div class="ltop">
+          ${s.d === 'prep'
+            ? `<span class="rank-badge" style="background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d">基</span>`
+            : `<span class="rank-badge lv-${s.lv}">${s.lv}</span>`}
+          <span class="lnm">${s.n}</span>
+        </div>
+        <div class="lsub">${subText}${lit ? ' · 已点亮' : ''}</div>
+      </div>`;
+    }).join('');
+    return `<div class="dgroup">
+      <div class="dgroup-h">${STEP_TEXT[st] || ('第 ' + st + ' 步')}</div>
+      <div class="dgroup-body">${items}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('main').innerHTML = `
+    <div class="crumbs"><a data-go="home">领域总览</a> / <span>${d.name}</span></div>
+    <div class="sec-title">
+      <h2 style="color:${d.color}">${d.name}</h2>
+      <span>${vis.filter(s => state.lit.has(s.id)).length}/${SKILLS.filter(s => s.d === d.id).length} 已点亮${hiddenCount ? ` · 已折叠 ${hiddenCount} 个可跳过项` : ''}</span>
+      ${domainViewToggle()}
+    </div>
+    ${d.id === 'prep' ? `<div class="unsure" style="margin-bottom:14px">这一层不出独立考题，所以重要度对这里没有意义 —— 九条全都得会。</div>` : ''}
+    ${(() => {
+      const minSt = Math.min(...vis.map(s => stepOf(s.id)));
+      if (minSt <= 1) return '';
+      const entry = vis.find(s => stepOf(s.id) === minSt);
+      const outside = entry ? allPre(entry.id).filter(p => !vis.some(v => v.id === p)) : [];
+      if (!outside.length) return `<div class="hint-line">这里的技能都排在第 ${minSt} 步之后。</div>`;
+      return `<div class="hint-line">这里从第 ${minSt} 步开始，不是第一课 —— 要先会
+        ${outside.map(p => `<b data-goto-skill="${p}">${byId[p].n}</b>`).join('、')}。</div>`;
+    })()}
+    <div class="dlist">${groups}</div>`;
+}
+
 /* =======================================================================
  *  视图：领域地图
  * ======================================================================= */
@@ -431,7 +490,9 @@ function renderDomain(domId){
     return;
   }
 
-  // 手机上也走同一张横向地图（窄屏可以左右滑），不再切成纵向列表
+  // 窄屏可以切成竖排列表（默认还是地图）
+  if (window.innerWidth <= 1080 && state.domainView === 'list')
+    return renderDomainList(d, vis, hiddenCount);
 
   // 按步分列
   const byStep = {};
@@ -515,6 +576,7 @@ function renderDomain(domId){
     <div class="sec-title">
       <h2 style="color:${d.color}">${d.name}</h2>
       <span>${vis.filter(s => state.lit.has(s.id)).length}/${SKILLS.filter(s => s.d === d.id).length} 已点亮 · 最远到第 ${Math.max(...vis.map(s => stepOf(s.id)))} 步${hiddenCount ? ` · 已折叠 ${hiddenCount} 个可跳过项` : ''}</span>
+      ${domainViewToggle()}
     </div>
     ${window.innerWidth <= 1080 ? '<div class="swipe-hint">这张图比屏幕宽，左右滑动看全，点节点看详情。</div>' : ''}
     <div class="legend legend-state">
@@ -1855,6 +1917,9 @@ document.getElementById('main').addEventListener('click', e => {
     if (qq) alert(`${unescHtml(qq.q)}\n\n答案：${unescHtml(qq.a)}\n\n${unescHtml(qq.why)}${qq.steps ? '\n\n给分点：' + unescHtml(qq.steps) : ''}`);
     return;
   }
+
+  const dv = e.target.closest('[data-domain-view]');
+  if (dv){ state.domainView = dv.dataset.domainView === 'list' ? 'list' : 'map'; save(); render(); return; }
 
   const st = e.target.closest('[data-start]');
   if (st){ startQuiz(st.dataset.start); return; }
