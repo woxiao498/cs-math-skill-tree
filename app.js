@@ -703,8 +703,15 @@ function renderPanel(){
  * ======================================================================= */
 function startQuiz(sid){
   if (!hasQuiz(sid)) return;
-  // 不拦前置：先做题找感觉，点亮另算（点亮时才要求前置齐）
-  state.quiz = { sid, i: 0, answers: new Array(QUIZ[sid].length).fill(null), done: false };
+  const n = QUIZ[sid].length;
+  // 每次挑战题目顺序都重排。即时给答案是有意的（自学需要反馈），
+  // 但至少要堵住"记住第几题选什么"这条路。
+  const order = [...Array(n).keys()];
+  for (let i = n - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  state.quiz = { sid, order, i: 0, answers: new Array(n).fill(null), done: false };
   state.view = 'quiz';
   state.selected = sid;
   render();
@@ -714,9 +721,10 @@ function answerQuiz(oi){
   const z = state.quiz;
   if (!z || z.done) return;
   if (z.answers[z.i] !== null) return;         // 已答过就别覆盖
+  const qi = z.order ? z.order[z.i] : z.i;
   z.answers[z.i] = oi;
-  const q = QUIZ[z.sid][z.i];
-  scheduleWrong(z.sid, z.i, oi === q.a);
+  const q = QUIZ[z.sid][qi];
+  scheduleWrong(z.sid, qi, oi === q.a);
   const st = state.stats[z.sid] || { right: 0, total: 0 };
   st.total += 1;
   if (oi === q.a) st.right += 1;
@@ -738,7 +746,8 @@ function finishQuiz(){
   const z = state.quiz;
   if (z.solo){ quitQuiz(); return; }      // 错题单练不结算、不点亮
   const qs = QUIZ[z.sid];
-  const right = z.answers.filter((a, i) => a === qs[i].a).length;
+  const order = z.order || qs.map((_, k) => k);
+  const right = z.answers.filter((a, i) => a === qs[order[i]].a).length;
   const rate = right / qs.length;
   const p = state.progress[z.sid] || { tries: 0, best: 0 };
   p.tries += 1;
@@ -788,7 +797,8 @@ function renderQuiz(){
 
   const i = z.i;
   const solo = !!z.solo;      // 从错题本进来单练一道，不参与点亮
-  const q = qs[i];
+  const order = z.order || qs.map((_, k) => k);
+  const q = qs[order[i]];
   const picked = z.answers[i];
   const answered = picked !== null;
   const ok = answered && picked === q.a;
@@ -804,12 +814,11 @@ function renderQuiz(){
       <span class="ol">${'ABCD'[oi]}</span><span class="ot">${o}</span></button>`;
   }).join('');
 
-  const bar = qs.map((_, qi) => {
-    const a = z.answers[qi];
+  const bar = order.map((qidx, idx) => {
+    const a = z.answers[idx];
     let c = 'seg';
-    if (a === null) c += '';
-    else c += (a === qs[qi].a) ? ' seg-ok' : ' seg-no';
-    if (qi === i) c += ' seg-cur';
+    if (a !== null) c += (a === qs[qidx].a) ? ' seg-ok' : ' seg-no';
+    if (idx === i) c += ' seg-cur';
     return `<span class="${c}"></span>`;
   }).join('');
 
@@ -1550,7 +1559,7 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   const qz = p.get('quiz');
   if (qz && hasQuiz(qz)){
     const n = QUIZ[qz].length;
-    state.quiz = { sid: qz, i: +(p.get('qi') || 0), answers: new Array(n).fill(null), done: false };
+    state.quiz = { sid: qz, order: [...Array(n).keys()], i: +(p.get('qi') || 0), answers: new Array(n).fill(null), done: false };
     if (p.has('pick')) state.quiz.answers[state.quiz.i] = +p.get('pick');
     // ?finish=ok / finish=no 直接看结算页
     if (p.has('finish')){
