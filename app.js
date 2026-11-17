@@ -337,6 +337,9 @@ function renderDomain(domId){
     return;
   }
 
+  // 手机上一张要横滑三屏的图没什么用，换成按步分组的纵列表
+  if (window.innerWidth <= 700) return renderDomainList(d, vis, hiddenCount);
+
   // 按步分列
   const byStep = {};
   vis.forEach(s => { const st = stepOf(s.id); (byStep[st] = byStep[st] || []).push(s); });
@@ -431,6 +434,45 @@ function renderDomain(domId){
         ${nodes}
       </div>
     </div>`;
+}
+
+/* 窄屏的领域视图：按步分组，一条一条往下排，点一下选中 */
+function renderDomainList(d, vis, hiddenCount){
+  const byStep = {};
+  vis.forEach(s => { const st = stepOf(s.id); (byStep[st] = byStep[st] || []).push(s); });
+  const steps = Object.keys(byStep).map(Number).sort((a, b) => a - b);
+
+  const groups = steps.map(st => {
+    const items = byStep[st].map(s => {
+      const lit = state.lit.has(s.id);
+      const unlocked = isUnlocked(s.id);
+      const q = (s.q || []).length ? s.q.join('·') : '可不学';
+      return `<div class="lcard ${lit ? 'lit' : ''} ${unlocked ? '' : 'locked'} ${s.d === 'prep' ? 'prepcard' : ''}"
+                   data-skill="${s.id}">
+        <div class="ltop">
+          ${s.d === 'prep'
+            ? `<span class="rank-badge" style="background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d">基</span>`
+            : `<span class="rank-badge lv-${s.lv}">${s.lv}</span>`}
+          <span class="lnm">${s.n}</span>
+        </div>
+        <div class="lsub">${q}${lit ? ' · 已点亮' : ''}${unlocked ? '' : ' · 前置未齐'}</div>
+      </div>`;
+    }).join('');
+    return `<div class="dgroup">
+      <div class="dgroup-h">${STEP_TEXT[st] || ('第 ' + st + ' 步')}</div>
+      <div class="dgroup-body">${items}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('main').innerHTML = `
+    <div class="crumbs"><a data-go="home">领域总览</a> / <span>${d.name}</span></div>
+    <div class="sec-title">
+      <h2 style="color:${d.color}">${d.name}</h2>
+      <span>${vis.filter(s => state.lit.has(s.id)).length}/${SKILLS.filter(s => s.d === d.id).length} 已点亮${hiddenCount ? ` · 已折叠 ${hiddenCount} 个可跳过项` : ''}</span>
+    </div>
+    <div class="legend" style="margin-bottom:12px"><span>手机上按步往下排，点一条看详情。图上那张横向地图在电脑上看更清楚。</span></div>
+    ${d.id === 'prep' ? `<div class="unsure" style="margin-bottom:14px">这一层不出独立考题，所以重要度对这里没有意义 —— 九条全都得会。</div>` : ''}
+    <div class="dlist">${groups}</div>`;
 }
 
 /* =======================================================================
@@ -1149,6 +1191,10 @@ function renderMain(){
 }
 function render(){
   if (sweepLitByScore()) save();
+  // 右栏只有"选中了某个技能"才有意义。首页/排行/数据/错题/真题/卷子都不需要它，
+  // 白占 392px 把主区压扁（地图尤其吃亏）。
+  const showPanel = !!state.selected && state.view !== 'quiz' && state.view !== 'paper';
+  document.body.classList.toggle('no-panel', !showPanel);
   document.body.classList.toggle('quiz-mode', state.view === 'quiz');
   document.body.classList.toggle('paper-mode', state.view === 'paper');
   renderMain();
@@ -1526,6 +1572,15 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   });
 })();
 
+
+/* 窗口变窄/变宽时，领域图要在「横向地图」和「纵向列表」之间切换 */
+let _rzTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_rzTimer);
+  _rzTimer = setTimeout(() => {
+    if (state.view === 'domain') render();
+  }, 180);
+});
 
 /* 支持 #geo 这种直接进入某个领域 */
 (function applyHash(){

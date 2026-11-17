@@ -116,6 +116,33 @@ Object.entries(DOMAIN_VIDEO).forEach(([did, arr]) => {
 });
 PAPERS.forEach(p => checkBv(p.bv, `PAPERS ${p.year}`));
 
+// 11. D 级是「可跳过」，不该配题、也不该挂题型标签
+for (const s of SKILLS){
+  if (s.lv !== 'D') continue;
+  if (QUIZ[s.id]) fail(`${s.id}（${s.n}）是 D 级可跳过，却配了题`);
+  if ((s.q || []).length) fail(`${s.id}（${s.n}）是 D 级，q 里却还写着 ${s.q.join('/')}`);
+}
+
+// 12. A 级至少 5 题 —— 只有 5 题时「答对 4 题」才等于 80%
+for (const s of SKILLS){
+  if (s.lv !== 'A') continue;
+  const n = (QUIZ[s.id] || []).length;
+  if (n < 5) fail(`${s.id}（${s.n}）是 A 级，只有 ${n} 题，不足 5 题则 80% 等于全对`);
+}
+
+// 13. 每个非 D 技能至少要能取到一条视频（技能级没有就得有领域兜底）
+for (const s of SKILLS){
+  if (s.lv === 'D') continue;
+  if (!(SKILL_VIDEO[s.id] || DOMAIN_VIDEO[s.d])) fail(`${s.id}（${s.n}）取不到任何视频`);
+}
+
+// 14. 题干的「按上题」这种依赖，单练时会没头没尾
+for (const [k, arr] of Object.entries(QUIZ)){
+  arr.forEach((q, i) => {
+    if (/^按上题/.test(q.q) || /按上题/.test(q.q)) fail(`${k}[${i}] 题干依赖「上题」，错题单练和组卷时会没头没尾`);
+  });
+}
+
 // ---------- 报告 ----------
 const lvCount = { A: 0, B: 0, C: 0, D: 0 };
 SKILLS.forEach(s => lvCount[s.lv]++);

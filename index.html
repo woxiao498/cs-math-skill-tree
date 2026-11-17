@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>广东 3+证书 数学技能树</title>
+<meta name="description" content="广东 3+证书（高职高考）数学技能树：11 个领域 108 个技能，按往年卷面分值排优先级，配 B站 教学视频和 213 道练习题，可做可打印。">
+<meta name="theme-color" content="#0c1017">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230c1017'/%3E%3Ctext x='32' y='46' font-size='36' text-anchor='middle' fill='%235b8fd6' font-family='sans-serif'%3E%E6%95%B0%3C/text%3E%3C/svg%3E">
+<meta property="og:title" content="广东 3+证书 数学技能树">
+<meta property="og:description" content="11 个领域 108 个技能，按往年分值排优先级，配教学视频和 213 道练习题。">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://woxiao498.github.io/cs-math-skill-tree/">
 <style>
   :root{
     --bg:#0c1017; --bg2:#11161f; --panel:#141a24; --line:#232d3d;
@@ -256,7 +263,7 @@
   .paper .pq{margin-bottom:13px}
   .paper .qt{font-size:13.5px;line-height:1.75}
   .paper .po{display:flex;flex-wrap:wrap;gap:5px 24px;margin:5px 0 0 20px;font-size:13px;color:#222}
-  .paper .pspace{height:92px}
+  .paper .pspace{height:210px}
   .paper .pkey{margin-top:34px;padding-top:18px;border-top:2px dashed #bbb}
   .paper .pkey h3{font-size:14px;margin:0 0 12px}
   .paper .kgroup{margin-bottom:15px;font-size:12.5px;line-height:1.85}
@@ -274,6 +281,18 @@
     .paper .pkey{page-break-before:always}
     @page{margin:14mm 12mm}
   }
+
+  /* ---------- 窄屏领域列表 ---------- */
+  .dlist{display:flex;flex-direction:column;gap:16px}
+  .dgroup-h{font-size:11px;color:#7d92aa;letter-spacing:1px;margin-bottom:7px;padding-left:2px}
+  .dgroup-body{display:flex;flex-direction:column;gap:7px}
+  .lcard{background:#111823;border:1px solid #22303f;border-radius:9px;padding:10px 12px;cursor:pointer;transition:.12s}
+  .lcard:active{background:#16202c}
+  .lcard.lit{border-color:#2e6b4d;background:#10221a}
+  .lcard.locked{opacity:.55;border-style:dashed}
+  .ltop{display:flex;align-items:center;gap:8px}
+  .lnm{font-size:13px;color:#dbe4f0;font-weight:560}
+  .lsub{font-size:11px;color:#7d92aa;margin-top:3px;padding-left:26px}
 
   /* ---------- 数据页 ---------- */
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
@@ -312,6 +331,7 @@
   .sbbtns .btn.primary{color:#a9cbef;border-color:#2f5480;background:#1c3350}
 
   /* ---------- 刷题时全宽 ---------- */
+  body.no-panel aside#panel{display:none}
   body.quiz-mode aside#panel{display:none}
   body.quiz-mode .layout > main{max-width:880px;width:100%;margin:0 auto}
   /* 打印卷子也要全宽，右侧面板没用 */
