@@ -69,14 +69,14 @@
   .toggle input{accent-color:var(--accent)}
 
   /* ---------- 进度条 ---------- */
-  /* 进度：不再是一条通栏加载条 —— 那是浏览器在下载东西的视觉语言 */
-  .progressbar{position:relative;height:auto;background:none;border-bottom:1px solid var(--line);
-    padding:8px 24px 9px;display:flex;align-items:center;gap:10px}
-  .progressbar::before{content:"";flex:1;height:2px;border-radius:1px;background:#1a2331}
-  #pbar-fill{position:absolute;left:24px;top:50%;margin-top:-2px;height:2px;width:0;
-    border-radius:1px;background:linear-gradient(90deg,#2c4a6e,#5b8fd6);transition:width .35s;
-    max-width:calc(100% - 48px)}
-  #pbar-text{position:static;font-size:11px;color:var(--txt3);letter-spacing:.3px;white-space:nowrap}
+  /* 进度：只放「点亮数 + 百分比」和一条独立 track。
+     覆盖分、连续天数不在这儿 —— 四个信息挤一行，手机一折行蓝线就没了。 */
+  .progressbar{display:flex;align-items:center;gap:14px;padding:9px 24px;
+    border-bottom:1px solid var(--line);background:none}
+  .pbar-track{flex:1;min-width:0;height:3px;border-radius:2px;background:#1a2331;overflow:hidden}
+  #pbar-fill{height:100%;width:0;border-radius:2px;transition:width .35s;
+    background:linear-gradient(90deg,#2c4a6e,#5b8fd6)}
+  #pbar-text{flex:0 0 auto;font-size:11px;color:var(--txt3);letter-spacing:.3px;white-space:nowrap}
 
   /* ---------- 布局 ---------- */
   .layout{display:flex;align-items:stretch;min-height:calc(100vh - 122px)}
@@ -646,7 +646,7 @@
   .crumbs+.sec-title > span{font-size:13px;color:#8494a8}
 
   /* 动作 B：四个 KPI 盒子并成一条仪表横档，靠细线分，不靠盒子分 */
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:2px;
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:0;padding:2px;
     background:linear-gradient(180deg,#161f2b,#121a24);
     border:1px solid #232f3f;border-radius:12px}
   .kpi{background:none;border:0;border-right:1px solid #1e2938;border-radius:0;
@@ -671,14 +671,12 @@
   @media (max-width:640px){
     .kpis{grid-template-columns:repeat(2,1fr)}
     .kpi:nth-child(2n){border-right:0}
-    .kpi:nth-child(-n+2){border-bottom:1px solid #1e2938}
+    .kpi:nth-child(-n+4){border-bottom:1px solid #1e2938}
     .kpi b{font-size:24px;letter-spacing:-1px}
     .crumbs+.sec-title h2{font-size:22px}
     /* 进度条那行字变长之后（加了覆盖分），手机上会顶出屏幕，允许换行 */
-    .progressbar{flex-wrap:wrap;padding:7px 14px 8px;gap:6px}
-    #pbar-text{white-space:normal;line-height:1.55;font-size:10.5px}
-    .progressbar::before{display:none}
-    #pbar-fill{position:static;margin:0;width:100%;max-width:100%;order:2}
+    .progressbar{padding:8px 14px;gap:10px}
+    #pbar-text{font-size:10.5px}
   }
 
   </style>
@@ -714,7 +712,7 @@
   </div>
 </header>
 
-<div class="progressbar"><div id="pbar-fill"></div><span id="pbar-text"></span></div>
+<div class="progressbar"><div class="pbar-track"><div id="pbar-fill"></div></div><span id="pbar-text"></span></div>
 
 <div class="layout">
   <main id="main"></main>

@@ -187,7 +187,13 @@ function save(){
     localStorage.setItem(KEY, JSON.stringify({
       lit: [...state.lit], goal: state.goal, showSkippable: state.showSkippable,
       wrong: state.wrong, progress: state.progress, streak: state.streak, stats: state.stats,
-      unlit: [...state.unlitSet], domainView: state.domainView
+      unlit: [...state.unlitSet], domainView: state.domainView,
+      // 模拟考也存：120 分钟的卷子刷新一下就没了，太伤人。不存 timer 本身，存剩余秒数 + 时间戳
+      mock: state.mock ? {
+        paper: state.mock.paper, ans: state.mock.ans,
+        fillSelf: state.mock.fillSelf, solveSelf: state.mock.solveSelf,
+        left: state.mock.left, done: state.mock.done, savedAt: Date.now()
+      } : null
     }));
   }catch(e){ /* file:// 下个别浏览器禁写，忽略，进度仍存在内存里 */ }
 }
@@ -205,6 +211,17 @@ function load(){
     state.unlitSet = new Set((d.unlit || []).filter(x => byId[x]));
     if (d.domainView === 'list') state.domainView = 'list';
     if (d.streak) state.streak = d.streak;
+    // 恢复模拟考：按时间戳扣掉关页面期间流逝的时间，别让人关一夜还剩 120 分钟
+    if (d.mock && d.mock.paper && d.mock.paper.choice && d.mock.paper.choice.length){
+      const m = d.mock;
+      const gap = m.savedAt ? Math.round((Date.now() - m.savedAt) / 1000) : 0;
+      state.mock = {
+        paper: m.paper, ans: m.ans || [], fillSelf: m.fillSelf || [], solveSelf: m.solveSelf || [],
+        left: Math.max(0, (m.left || 0) - gap), done: !!m.done
+      };
+      if (!state.mock.done && state.mock.left > 0){ state.view = 'mock'; tickMock(); }
+      else if (!state.mock.done && state.mock.left <= 0) state.mock.done = true;
+    }
   }catch(e){}
 }
 
@@ -317,11 +334,10 @@ function renderProgress(){
   const pct = vis.length ? Math.round(done / vis.length * 100) : 0;
   document.getElementById('pbar-fill').style.width = pct + '%';
   const st = state.streak || {};
-  const streakTxt = st.days ? ` · 连续学习 ${st.days} 天` : '';
-  const cov = coveredScore();
-  const covTxt = done ? ` · 按往年卷面粗估能覆盖约 ${cov} / ${EXAM.total} 分` : '';
+  // 进度条只放两个信息：点亮数和百分比。覆盖分和连续天数都在数据页，
+  // 四个信息挤一行，手机一折行蓝线就没了。
   document.getElementById('pbar-text').textContent =
-    `已点亮 ${done} / ${vis.length} 个技能 · ${pct}%${covTxt}${streakTxt}`;
+    `已点亮 ${done} / ${vis.length} · ${pct}%`;
 }
 
 /* 今天学哪一课：从前置已齐、还没点亮的技能里挑一个（重要度优先、步数小的优先）。
@@ -1777,6 +1793,7 @@ function renderStats(){
       <div class="kpi"><b>${totalR}<span>/${totalT}</span></b><em>累计答对</em></div>
       <div class="kpi"><b>${totalT ? rate + '%' : '—'}</b><em>总正确率</em></div>
       <div class="kpi"><b>${litN}</b><em>已点亮技能</em></div>
+      <div class="kpi"><b>${coveredScore()}<span>/${EXAM.total}</span></b><em>按卷面粗估覆盖分</em></div>
       <div class="kpi"><b>${st.days || 0}</b><em>连续学习天数</em></div>
     </div>
 
