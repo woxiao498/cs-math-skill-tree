@@ -292,6 +292,9 @@
     .paper{padding:0;border-radius:0}
     .paper .pq{page-break-inside:avoid}
     .paper .pkey{page-break-before:always}
+    /* 「标准写法」在屏幕上是收起的 <details>，打印时要强制展开，否则带答案的卷子会丢这块 */
+    .paper .kstd > div{display:block!important}
+    .paper .kstd summary{display:none}
     @page{margin:14mm 12mm}
   }
 
@@ -322,9 +325,10 @@
   .slit{font-size:11px;color:var(--txt3);text-align:right}
 
   /* ---------- 顶栏「更多」 ---------- */
-  .more-wrap{position:relative}
+  .more-wrap{position:relative;margin-left:auto}
   .more-menu{display:none;position:absolute;right:0;top:calc(100% + 7px);z-index:60;
-    background:#131b26;border:1px solid #2b3a4d;border-radius:10px;padding:6px;min-width:158px;
+    background:#131b26;border:1px solid #2b3a4d;border-radius:10px;padding:6px;
+    min-width:158px;max-width:calc(100vw - 32px);
     box-shadow:0 16px 34px -14px #000}
   .more-wrap.open .more-menu{display:block}
   .more-menu .btn{display:block;width:100%;text-align:left;border:none;background:none;
@@ -523,6 +527,9 @@
     .paper .qt{font-size:14px}
     .paper .po{grid-template-columns:repeat(2,1fr)}
     #search{font-size:16px}   /* iOS 上小于 16px 会在聚焦时自动放大整页 */
+    /* 「更多」在窄屏换行后要贴右，菜单才不会有一截跑到屏幕外 */
+    .more-wrap{margin-left:auto}
+    .more-menu{position:fixed;left:12px;right:12px;width:auto;min-width:0;top:auto}
     .fname{font-size:23px}
     .focus{padding:22px 20px}
     .fbtns{gap:8px}

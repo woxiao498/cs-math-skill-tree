@@ -505,7 +505,7 @@ function renderDomain(domId){
       <h2 style="color:${d.color}">${d.name}</h2>
       <span>${vis.filter(s => state.lit.has(s.id)).length}/${SKILLS.filter(s => s.d === d.id).length} 已点亮 · 最远到第 ${Math.max(...vis.map(s => stepOf(s.id)))} 步${hiddenCount ? ` · 已折叠 ${hiddenCount} 个可跳过项` : ''}</span>
     </div>
-    ${window.innerWidth <= 700 ? '<div class="swipe-hint">这张图比屏幕宽，左右滑动看全，点节点看详情。</div>' : ''}
+    ${window.innerWidth <= 1080 ? '<div class="swipe-hint">这张图比屏幕宽，左右滑动看全，点节点看详情。</div>' : ''}
     <div class="legend legend-state">
       <span><i class="lg-lit"></i>已点亮</span>
       <span><i class="lg-open"></i>能学，还没点亮</span>
@@ -1802,6 +1802,7 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   if (p.get('paperMode') === 'wrong') state.paperMode = 'wrong';
   // ?panelOpen=1 让窄屏抽屉直接弹出来，方便截图核对
   if (p.has('panelOpen')) setTimeout(() => document.body.classList.add('panel-open'), 80);
+  if (p.has('more')) setTimeout(() => document.getElementById('more-wrap').classList.add('open'), 80);
   // ?demoStats=1 —— 造点做题记录，方便看数据页
   if (p.has('demoStats')){
     const demo = { s3: [3, 3], i3: [2, 3], t9: [1, 3], g8: [2, 2], r6: [1, 2], q2: [2, 2] };
