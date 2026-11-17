@@ -229,9 +229,15 @@ const hasQuiz = id => !!(QUIZ[id] && QUIZ[id].length);
 const bestRate = id => (state.progress[id] && state.progress[id].best) || 0;
 const quizCount = () => Object.keys(QUIZ).reduce((a, k) => a + QUIZ[k].length, 0);
 
-/* 及格题数。注意：题量 1~3 时 ceil(n×0.8) 就等于 n，也就是必须全对。
- * 文案不能写「≥80%」——3/3 是 100%，那样等于自己打自己。 */
-const needRight = n => Math.max(1, Math.ceil(n * QUIT_PASS));
+/* 及格题数。
+ * ceil(n×0.8) 在 1~3 题时都等于 n，也就是必须全对 —— 3 题全对通过率只有 0.51，
+ * 比 5 题答对 4 题（0.63）还难。边缘考点（C 级 3 题）比核心考点（A 级 5 题）更严，
+ * 这个错位说不过去，所以 3 题放一道：答对 2 就算过。1~2 题仍然全对。 */
+function needRight(n){
+  if (n <= 2) return n;          // 1 题、2 题：全对
+  if (n === 3) return 2;         // 3 题：可以错一道
+  return Math.ceil(n * QUIT_PASS); // 5 题 → 4
+}
 function quizRule(n){
   const need = needRight(n);
   return need >= n ? `这课 ${n} 题要全对` : `这课 ${n} 题要答对 ${need} 题`;
@@ -1096,6 +1102,8 @@ function startMock(){
     ans: new Array(paper.choice.length).fill(null),
     fillSelf: new Array(paper.fill.length).fill(null),
     solveSelf: new Array(paper.solve.length).fill(null),
+    fillText: new Array(paper.fill.length).fill(''),
+    solveText: new Array(paper.solve.length).fill(''),
     left: EXAM.minutes * 60,
     done: false
   };
@@ -1156,7 +1164,12 @@ function finishMock(){
 function quitMock(){
   stopMockTimer();
   const m = state.mock;
-  if (m && !m.done && m.ans.some(a => a !== null)){
+  const hasWork = m && !m.done && (
+    m.ans.some(a => a !== null) ||
+    (m.fillText || []).some(t => t.trim()) ||
+    (m.solveText || []).some(t => t.trim())
+  );
+  if (hasWork){
     if (!confirm('还没交卷，现在退出会丢掉这次作答。确定退出？')) return;
   }
   state.mock = null;
@@ -1214,7 +1227,7 @@ function renderMock(){
     const self = m.fillSelf[i];
     return `<div class="mk-q">
       <div class="mk-qt"><b>${p.choice.length + i + 1}.</b>（5 分）${q.q}</div>
-      <textarea class="mk-input" rows="2" placeholder="在这里写答案，写完对照下面的标准答案自己判"></textarea>
+      <textarea class="mk-input" rows="2" data-mock-text="fill:${i}" placeholder="在这里写答案，写完对照下面的标准答案自己判">${escHtml(m.fillText[i] || '')}</textarea>
       <details class="mk-ans"><summary>看标准答案</summary>
         <div class="mk-ansbody"><b>${q.a}</b><div class="kwhy">${q.why}</div></div>
       </details>
@@ -1230,7 +1243,7 @@ function renderMock(){
     const self = m.solveSelf[i];
     return `<div class="mk-q">
       <div class="mk-qt"><b>${p.choice.length + p.fill.length + i + 1}.</b>（${q.pts || 12} 分）${q.q}</div>
-      <textarea class="mk-input" rows="5" placeholder="写解题过程。写完展开答案，按给分点自己估分。"></textarea>
+      <textarea class="mk-input" rows="5" data-mock-text="solve:${i}" placeholder="写解题过程。写完展开答案，按给分点自己估分。">${escHtml(m.solveText[i] || '')}</textarea>
       <details class="mk-ans"><summary>看标准答案和给分点</summary>
         <div class="mk-ansbody"><b>${q.a}</b>
           <div class="kwhy">${q.why}</div>
@@ -1458,16 +1471,16 @@ const PAPER_SOLVE = [
     steps: '画图并设塔高 3 分；B 点到塔底 2 分；A 点到塔底 3 分；列方程 2 分；解出并答 2 分',
     std: '设塔高 h 米，塔底为 O\n在直角三角形 OBC 中，∠OBC = 45°，所以 OB = h\n在直角三角形 OAC 中，∠OAC = 30°，所以 OA = h/tan30° = √3h\nOA − OB = AB，即 √3h − h = 40\nh = 40/(√3−1) = 20(√3+1) 米' },
 
-  { pts: 14, q: '已知椭圆 x²/4 + y² = 1，直线 y = x + 1 与椭圆交于 A、B 两点。(1) 求椭圆的长轴长和焦距；(2) 求弦长 |AB|。',
+  { pts: 14, dom: 'geo', q: '已知椭圆 x²/4 + y² = 1，直线 y = x + 1 与椭圆交于 A、B 两点。(1) 求椭圆的长轴长和焦距；(2) 求弦长 |AB|。',
     a: '(1) 长轴长 4，焦距 2√3。(2) |AB| = 8√2/5。',
     why: '把直线代入椭圆：x²/4 + (x+1)² = 1，化简得 5x² + 8x = 0，两根 x=0 和 x=−8/5。弦长 = √(1+k²)·|x₁−x₂|。',
     steps: '第一问 3 分；联立消元 4 分；解出两根 3 分；弦长公式 2 分；结果 2 分',
     std: '(1) a = 2，b = 1，c = √3，长轴长 2a = 4，焦距 2c = 2√3\n(2) 把 y = x+1 代入 x²/4 + y² = 1：\nx² + 4(x+1)² = 4，整理得 5x² + 8x = 0\n解得 x₁ = 0，x₂ = −8/5，|x₁−x₂| = 8/5\n|AB| = √(1+1²)·|x₁−x₂| = √2 × 8/5 = 8√2/5' },
-  { pts: 12, q: '已知抛物线 y² = 4x 与直线 y = x − 1 交于 A、B 两点。(1) 求抛物线的焦点坐标；(2) 求线段 AB 的中点坐标。',
-    a: '(1) 焦点 (1, 0)。(2) 中点 (3, 2)。',
-    why: '联立得 (x−1)² = 4x，即 x² − 6x + 1 = 0。由韦达定理 x₁+x₂ = 6。',
-    steps: '第一问 2 分；联立 3 分；整理成一元二次 2 分；韦达求 x₁+x₂ 3 分；求纵坐标并答 2 分',
-    std: '(1) 2p = 4，p = 2，焦点 (1, 0)\n(2) 把 y = x−1 代入 y² = 4x：\n(x−1)² = 4x，即 x² − 6x + 1 = 0\n由韦达定理 x₁ + x₂ = 6，中点横坐标 3\ny₁ + y₂ = (x₁−1) + (x₂−1) = 4，中点纵坐标 2\n所以 AB 中点 (3, 2)' }
+  { pts: 14, dom: 'geo', q: '已知抛物线 y² = 4x 与直线 y = x − 1 交于 A、B 两点。(1) 求抛物线的焦点坐标；(2) 求线段 AB 的中点坐标；(3) 求弦长 |AB|。',
+    a: '(1) 焦点 (1, 0)。(2) 中点 (3, 2)。(3) |AB| = 8。',
+    why: '联立得 (x−1)² = 4x，即 x² − 6x + 1 = 0。由韦达定理 x₁+x₂ = 6、x₁x₂ = 1。中点横坐标 3，纵坐标用 y=x−1 算。弦长先求 |x₁−x₂| = √((x₁+x₂)²−4x₁x₂) = √32 = 4√2，再乘 √(1+k²)。',
+    steps: '第一问 2 分；联立 3 分；整理成一元二次 2 分；韦达求中点 3 分；弦长公式 2 分；结果 2 分',
+    std: '(1) 2p = 4，p = 2，焦点 (1, 0)\n(2) 把 y = x−1 代入 y² = 4x：\n(x−1)² = 4x，即 x² − 6x + 1 = 0\n由韦达定理 x₁ + x₂ = 6，中点横坐标 3\ny₁ + y₂ = (x₁−1) + (x₂−1) = 4，中点纵坐标 2\n所以 AB 中点 (3, 2)\n(3) |x₁−x₂| = √((x₁+x₂)² − 4x₁x₂) = √(36 − 4) = 4√2\n|AB| = √(1+1²)·|x₁−x₂| = √2 × 4√2 = 8' }
 ];
 
 /* 填空/解答题里也有 < >（x² − x − 6 < 0），进 innerHTML 前先转义 */
@@ -1576,11 +1589,14 @@ function buildPaper(mode){
     return a.slice(0, n);
   };
 
-  // 解答题按分值配：3 道 12 分 + 1 道 14 分的末题，和真卷 12/12/12/14 对齐
+  // 解答题按分值配：3 道 12 分 + 1 道 14 分的末题，和真卷 12/12/12/14 对齐。
+  // 末题优先从圆锥曲线取 —— 真卷那道 14 分基本钉在解析几何上（g17 的 tip 里自己也这么写）。
   const s12 = PAPER_SOLVE.filter(q => (q.pts || 12) !== 14);
   const s14 = PAPER_SOLVE.filter(q => q.pts === 14);
-  const solvePicks = s14.length
-    ? [...pickN(s12, 3), ...pickN(s14, 1)]
+  const s14geo = s14.filter(q => q.dom === 'geo');
+  const finalPick = s14geo.length ? pickN(s14geo, 1) : (s14.length ? pickN(s14, 1) : []);
+  const solvePicks = finalPick.length
+    ? [...pickN(s12, 3), ...finalPick]
     : pickN(PAPER_SOLVE, 4);
 
   return {
@@ -2028,6 +2044,16 @@ function quitQuiz(){
   }
   render();
 }
+
+/* 模拟考的填空/解答输入：只记状态，不重绘。
+ * 以前 textarea 没有回填，学生写完点「写对了」/选项就会清空。 */
+document.getElementById('main').addEventListener('input', e => {
+  const t = e.target.closest('[data-mock-text]');
+  if (!t || !state.mock) return;
+  const [kind, i] = t.dataset.mockText.split(':');
+  if (kind === 'fill') state.mock.fillText[+i] = t.value;
+  else if (kind === 'solve') state.mock.solveText[+i] = t.value;
+});
 
 document.getElementById('panel').addEventListener('click', e => {
   const gs = e.target.closest('[data-goto-skill]');
