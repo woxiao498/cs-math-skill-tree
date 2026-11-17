@@ -329,7 +329,7 @@ function renderHome(){
     SKILLS.filter(s => s.d === d.id).forEach(s =>
       allPre(s.id).forEach(p => { if (byId[p].d !== d.id) ext.add(p); }));
     return `
-      <div class="dom-card" data-dom="${d.id}" style="--dc:${d.color}">
+      <div class="dom-card" data-dom="${d.id}" tabindex="0" role="button" style="--dc:${d.color}">
         <h3>${d.name}</h3>
         <div class="meta">
           ${d.id === 'prep'
@@ -456,7 +456,7 @@ function renderDomain(domId){
     const missN = hardPre(s.id).filter(p => !state.lit.has(p)).length;
     const subText = (!lit && missN) ? `差 ${missN} 个前置` : q;
     return `
-      <div class="${cls}" data-skill="${s.id}"
+      <div class="${cls}" data-skill="${s.id}" tabindex="0" role="button"
            style="left:${p0.x}px;top:${p0.y}px;width:${W}px;height:${H}px;--nc:${d.color}">
         <span class="dot"></span>
         <div class="nm">${s.n}</div>
@@ -523,7 +523,7 @@ function renderDomainList(d, vis, hiddenCount){
       const unlocked = isUnlocked(s.id);
       const q = (s.q || []).length ? s.q.join('·') : '可不学';
       return `<div class="lcard ${lit ? 'lit' : ''} ${unlocked ? '' : 'locked'} ${s.d === 'prep' ? 'prepcard' : ''}"
-                   data-skill="${s.id}">
+                   data-skill="${s.id}" tabindex="0" role="button">
         <div class="ltop">
           ${s.d === 'prep'
             ? `<span class="rank-badge" style="background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d">基</span>`
@@ -590,7 +590,7 @@ function renderRank(){
   const rankRow = s => {
     const d = domById[s.d];
     const q = (s.q || []).length ? s.q.map(x => `<span class="tag q">${x}</span>`).join(' ') : '<span class="tag">不考</span>';
-    return `<div class="rank-row" data-skill="${s.id}">
+    return `<div class="rank-row" data-skill="${s.id}" tabindex="0" role="button">
       ${s.d === 'prep'
         ? `<span class="rank-badge" style="background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d;white-space:nowrap">基</span>`
         : `<span class="rank-badge lv-${s.lv}">${s.lv}</span>`}
@@ -636,7 +636,7 @@ function renderSearch(){
   }
   const rows = hits.map(s => {
     const d = domById[s.d];
-    return `<div class="rank-row" data-skill="${s.id}">
+    return `<div class="rank-row" data-skill="${s.id}" tabindex="0" role="button">
       <span class="rank-badge lv-${s.lv}">${s.lv}</span>
       <span class="nm">${s.n}</span>
       <span class="dom" style="color:${d.color}88">${d.short}</span>
@@ -721,7 +721,7 @@ function renderPanel(){
     ? s.pre.map(p => {
         const soft = softs.includes(p);
         const ok = state.lit.has(p);
-        return `<span class="chip ${ok ? 'ok' : 'miss'} ${soft ? 'soft' : ''}" data-skill="${p}"
+        return `<span class="chip ${ok ? 'ok' : 'miss'} ${soft ? 'soft' : ''}" data-skill="${p}" tabindex="0" role="button"
           title="${soft ? '推荐前置' : '必须前置'}">${state.lit.has(p) ? '✓' : '·'} ${byId[p].n}${soft ? ' (推荐)' : ''}</span>`;
       }).join('')
     : '<span style="font-size:12px;color:#5f7085">无前置，这是起点</span>';
@@ -1286,7 +1286,12 @@ function renderPaper(){
           <span>${isWrong ? `共 ${p.choice.length} 题` : '考试时间 120 分钟'}</span>
           ${isWrong ? '' : '<span>满分 150 分</span>'}
         </div>
-        <div class="pexam-info">姓名<span class="ul"></span>班级<span class="ul"></span>考号<span class="ul"></span>得分<span class="ul"></span></div>
+        <div class="pexam-info">
+          <span class="pi">姓名<i class="ul"></i></span>
+          <span class="pi">班级<i class="ul"></i></span>
+          <span class="pi">考号<i class="ul"></i></span>
+          <span class="pi">得分<i class="ul"></i></span>
+        </div>
         <div class="pnote"><b>注意事项</b>${isWrong
           ? '1. 本卷由你自己的错题组成，题目为自编练习题，非官方真题。'
           : '1. 本卷为自编练习题，非官方真题。2. 一、选择题 15 小题，每题 5 分，共 75 分。3. 二、填空题 5 小题，每题 5 分，共 25 分。4. 三、解答题 4 小题，共 50 分。'}</div>
@@ -1633,6 +1638,16 @@ document.addEventListener('keydown', e => {
   } else if (e.key === 'Enter'){
     if (z.answers[z.i] !== null){ e.preventDefault(); nextQuestion(); }
   }
+});
+
+/* tabindex 的卡片用 Enter 也能触发（原生只有 button / a 会自己响应） */
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const t = e.target;
+  if (!t || !t.getAttribute || t.getAttribute('tabindex') !== '0') return;
+  if (t.tagName === 'BUTTON' || t.tagName === 'A') return;
+  e.preventDefault();
+  t.click();
 });
 
 /* 分享给同学：手机上走系统分享，桌面复制链接 */

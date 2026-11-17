@@ -48,6 +48,12 @@
     background:#0e131b;border:1px solid var(--line);color:var(--txt);font-size:13px;
   }
   #search:focus{outline:none;border-color:var(--accent)}
+  /* 键盘焦点：原来全站唯一的 focus 规则是把输入框的 outline 去掉，
+     等于 Tab 过去看不出焦点在哪。这里补回来。 */
+  :focus-visible{outline:2px solid #5b8fd6;outline-offset:2px}
+  #search:focus-visible{outline:2px solid #5b8fd6;outline-offset:1px}
+  .node:focus-visible,.dom-card:focus-visible,.rank-row:focus-visible,
+  .lcard:focus-visible,.chip:focus-visible{outline:2px solid #5b8fd6;outline-offset:2px}
   .top-actions{display:flex;align-items:center;gap:10px;font-size:12.5px;flex-wrap:wrap}
   .btn{
     padding:6px 12px;border:1px solid var(--line);border-radius:7px;color:var(--txt2);
@@ -143,10 +149,11 @@
     background:transparent;border:1.5px solid #52657e}
   .node.lit{background:linear-gradient(160deg,#17253a,#14202f);border-color:var(--nc);box-shadow:0 0 0 1px rgba(91,143,214,.25),0 8px 20px -12px var(--nc)}
   .node.lit .dot{background:var(--nc);border-color:var(--nc);box-shadow:0 0 8px var(--nc)}
-  /* 锁定：虚线 + 名字压暗 + 红块，和「没学过」的空心圆分开 */
+  /* 锁定：虚线 + 名字压暗 + 冷色锁块。
+     这里不能用红色 —— 红在这站里是「错题 / 答错 / 到期」，锁是状态不是错误。 */
   .node.locked{border-style:dashed;border-color:#26303d}
   .node.locked .nm{color:#6b7d92}
-  .node.locked .dot{background:#b3453a;border-color:#b3453a;border-radius:2px}
+  .node.locked .dot{background:#52657e;border-color:#52657e;border-radius:2px}
   .node.sel{border-color:#8fb4e8 !important;box-shadow:0 0 0 2px rgba(143,180,232,.35),0 0 22px -4px #4d7fb8}
   .node.hl{border-color:#4d7fb8}
   .node.dimmed{opacity:.24}
@@ -158,13 +165,17 @@
   .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--txt3);margin:0 0 14px}
   .legend i{display:inline-block;width:22px;height:0;border-top:2px solid #33415a;vertical-align:middle;margin-right:5px}
   .legend i.dash{border-top-style:dashed}
-  .legend-state span{display:inline-flex;align-items:center;gap:6px;font-size:12px}
-  .legend-state i{width:14px;height:14px;border-radius:4px;display:inline-block;border:1px solid #2f3d52;background:#161d28}
+  /* 图例做成「节点的缩小版」，不是一个勾选框 */
+  .legend-state span{display:inline-flex;align-items:center;gap:7px;font-size:12px}
+  .legend-state i{position:relative;width:52px;height:22px;border-radius:6px;display:inline-block;
+    border:1px solid #2f3d52;background:#161d28}
+  .legend-state i::after{content:"";position:absolute;right:7px;top:7px;width:6px;height:6px;
+    border-radius:50%;border:1.5px solid #52657e;background:transparent}
   .legend-state .lg-lit{background:#17253a;border-color:#5b8fd6}
-  .legend-state .lg-open{background:#161d28;border-color:#2f3d52}
-  .legend-state .lg-lock{border:1px dashed #4a5566;background:#101620}
-  .legend-state .lg-skip{background:repeating-linear-gradient(135deg,#161d28 0 3px,#1a222e 3px 6px)}
-  .legend-state i.lg-lock::after{content:""}
+  .legend-state .lg-lit::after{background:#5b8fd6;border-color:#5b8fd6;box-shadow:0 0 6px #5b8fd6}
+  .legend-state .lg-lock{border-style:dashed;border-color:#26303d}
+  .legend-state .lg-lock::after{background:#52657e;border-color:#52657e;border-radius:2px}
+  .legend-state .lg-skip{background:repeating-linear-gradient(135deg,#161d28 0 4px,#1a222e 4px 8px)}
 
   /* ---------- 排行 ---------- */
   .rank-row{
@@ -235,9 +246,10 @@
     font-family:"Songti SC","STSong","SimSun","Noto Serif SC",serif}
   .paper .phead h2{margin:0 0 7px;font-size:19px;font-weight:700;letter-spacing:.5px}
   .paper .pmeta{display:flex;gap:18px;font-size:12px;color:#555;flex-wrap:wrap}
-  /* 卷头信息栏：真卷第一页一定有这一行 */
-  .paper .pexam-info{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:#333;margin:10px 0 4px}
-  .paper .pexam-info .ul{display:inline-block;width:88px;border-bottom:1px solid #444;margin:0 0 -3px 4px}
+  /* 卷头信息栏：每组「标签+下划线」绑在一起，手机上才不会被拆到两行 */
+  .paper .pexam-info{display:flex;flex-wrap:wrap;gap:10px 20px;font-size:12px;color:#333;margin:10px 0 4px}
+  .paper .pi{display:flex;align-items:flex-end;white-space:nowrap}
+  .paper .pi .ul{width:78px;height:15px;border-bottom:1px solid #444;margin-left:6px}
   .paper .pnote{font-size:11.5px;color:#333;margin:12px 0 20px;line-height:1.85}
   .paper .pnote b{display:block;margin-bottom:2px}
   .paper .psec{font-size:14.5px;font-weight:700;margin:28px 0 12px;padding-bottom:6px;border-bottom:1px solid #ddd}
@@ -275,7 +287,10 @@
   .lcard{background:#111823;border:1px solid #22303f;border-radius:9px;padding:10px 12px;cursor:pointer;transition:.12s}
   .lcard:active{background:#16202c}
   .lcard.lit{border-color:#2e6b4d;background:#10221a}
-  .lcard.locked{opacity:.55;border-style:dashed}
+  /* 手机列表的锁定态：桌面上已经弃用 opacity（半透明＝禁用），这里也跟上 */
+  .lcard.locked{border-style:dashed;border-color:#26303d;background:#0f1520}
+  .lcard.locked .lnm{color:#6b7d92}
+  .lcard.locked .lsub{color:#5a6a7d}
   .ltop{display:flex;align-items:center;gap:8px}
   .lnm{font-size:13px;color:#dbe4f0;font-weight:560}
   .lsub{font-size:11px;color:#7d92aa;margin-top:3px;padding-left:26px}
