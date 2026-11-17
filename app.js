@@ -109,6 +109,32 @@ function downstream(id){
   return SKILLS.filter(s => hardPre(s.id).includes(id)).map(s => s.id);
 }
 
+/* 点亮这个之后，下一步该学哪个：先挑前置已经齐的，再按重要度、再按步数 */
+function pickNextStep(id){
+  const kids = downstream(id).filter(k => byId[k]);
+  if (!kids.length) return null;
+  const ready = kids.filter(k => isUnlocked(k));
+  const pool = (ready.length ? ready : kids).slice();
+  pool.sort((a, b) => {
+    const la = LV_ORDER[byId[a].lv], lb = LV_ORDER[byId[b].lv];
+    if (la !== lb) return la - lb;
+    return stepOf(a) - stepOf(b);
+  });
+  return pool[0];
+}
+
+/* 跳到某个技能（换领域 + 选中 + 窄屏弹抽屉） */
+function goSkill(sid){
+  if (!byId[sid]) return;
+  state.quiz = null;
+  state.view = 'domain';
+  state.domainId = byId[sid].d;
+  state.selected = sid;
+  if (window.innerWidth <= 1080) document.body.classList.add('panel-open');
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 /* =======================================================================
  *  状态
  * ======================================================================= */
@@ -310,12 +336,12 @@ function renderHome(){
     </div>
     <div class="startbar">
       <div class="sbtxt">
-        <b>不知道从哪开始？</b>先点开「集合与逻辑用语」学交集并集 —— 卷面第 1 题基本固定考它，五分钟能上手。<br>
-        想先摸摸底也行：直接做题不拦你，答错不扣分，只有前置都点亮了才算真点亮。
+        <b>不知道从哪开始？</b>直接做第一课：数与式的运算，两道题，做完就算点亮。<br>
+        想先看看考试题长什么样也行——答错不扣分，只是前置没齐的话，做对也不算点亮。
       </div>
       <div class="sbbtns">
-        <button class="btn mini" data-dom="set">去看集合</button>
-        <button class="btn mini primary" data-start="s3">直接做这一课</button>
+        <button class="btn mini primary" data-start="p1">先做第一课</button>
+        <button class="btn mini" data-dom="set">看看集合那课</button>
       </div>
     </div>
     <div class="dom-grid">${cards}</div>
@@ -639,6 +665,8 @@ function renderPanel(){
   const best = bestRate(id);
   const vids = videoList(id);
   const domUnsure = d.unsure;      // 存疑有时写在领域上（比如复数），技能级没有
+  // 点亮了才给"下一步"，没点亮的话下一步就是把这一课做完
+  const nextStep = lit ? pickNextStep(id) : null;
 
   const pts = (s.pts || []).map(p => `<li>${p}</li>`).join('');
   const qTags = (s.q || []).map(x => `<span class="tag q">${x}题</span>`).join(' ') || '<span class="tag">不考</span>';
@@ -698,15 +726,14 @@ function renderPanel(){
 
     <div class="p-sec">点亮它能解锁</div>
     <div class="pre-chips">${kidChips}</div>
+    ${nextStep ? `<div class="nextup">这一步走完了，下一步建议学：<b data-goto-skill="${nextStep}">${byId[nextStep].n}</b></div>` : ''}
 
     <div class="p-actions">
       ${lit
         ? `<button class="btn lit" data-act="toggle">已点亮 · 点此取消</button>`
-        : !unlocked
-          ? `<button class="btn" disabled>前置没齐，先别点</button>`
-          : q
-            ? `<button class="btn primary" data-act="quiz">开始结业挑战（${QUIZ[id].length} 题）</button>`
-            : `<button class="btn primary" data-act="toggle">点亮它（这课没配题）</button>`}
+        : q
+          ? `<button class="btn primary" data-act="quiz">${unlocked ? `开始结业挑战（${QUIZ[id].length} 题）` : '先做做看（前置没齐，过了也不算点亮）'}</button>`
+          : `<button class="btn primary" data-act="toggle" ${unlocked ? '' : 'disabled'}>${unlocked ? '点亮它（这课没配题）' : '前置没齐'}</button>`}
       <button class="btn" data-act="goal">设为目标</button>
     </div>
     ${q ? `<div class="p-hint">${lit ? '已通过结业挑战' : `${quizRule(QUIZ[id].length)}才能点亮${best ? ` · 你目前最好成绩 ${Math.round(best * 100)}%` : ''}`}</div>` : ''}
@@ -806,7 +833,10 @@ function renderQuiz(){
               : `过了。${s.n} 已经点亮。`)
           : `差一点。${quizRule(qs.length)}才算过。没过不扣任何东西，错题已经进错题本了。`}</div>
         <div class="qr-actions">
-          <button class="btn primary" data-quiz-retry>再来一次</button>
+          ${(z.missingPre && z.missingPre.length)
+            ? z.missingPre.map(m => `<button class="btn primary" data-goto-skill="${m}">去学「${byId[m].n}」</button>`).join('')
+            : ''}
+          <button class="btn ${pass ? '' : 'primary'}" data-quiz-retry>再来一次</button>
           ${state.wrong.length ? `<button class="btn" data-go="wrong">看错题本</button>` : ''}
           <button class="btn" data-go="home">回总览</button>
         </div>
@@ -845,7 +875,7 @@ function renderQuiz(){
     <div class="crumbs"><a data-go="home">领域总览</a> / <span>${s.n}</span> / <span>结业挑战</span></div>
     <div class="quiz-head">
       <div class="quiz-title">${s.n}</div>
-      <div class="quiz-sub">${solo ? '复习错题 · 答对一次往后推一档' : `第 ${i + 1} / ${qs.length} 题 · ${s.lv} 级 · 答错不扣分，只记进错题本`}</div>
+      <div class="quiz-sub">${solo ? '复习错题 · 答对一次往后推一档' : `第 ${i + 1} / ${qs.length} 题 · 答错不扣分，只记进错题本`}</div>
       ${solo ? '' : `<div class="quiz-bar">${bar}</div>`}
     </div>
 
@@ -1262,11 +1292,14 @@ function renderStats(){
     </div>`;
 
   const weakest = tested[0];
+  // 样本太少时别下「都 80% 以上」这种结论 —— 做 5 道蒙对 4 道也叫 80%
   const advice = !totalT
-    ? '还没做过题，先去首页点「直接做这一课」试试水。'
-    : weakest && weakest.right / weakest.total < 0.8
-      ? `最该补的是<b>${weakest.d.name}</b>，正确率只有 ${Math.round(weakest.right / weakest.total * 100)}%。`
-      : '各块正确率都在 80% 以上了，可以往上冲更难的技能。';
+    ? '还没做过题。先去首页点「先做第一课」，两道题就算开始。'
+    : totalT < 15
+      ? `才做了 ${totalT} 道题，样本太少看不出强弱——先做够 15 道再回来看这一页。`
+      : weakest && weakest.right / weakest.total < 0.8
+        ? `最该补的是<b>${weakest.d.name}</b>，正确率只有 ${Math.round(weakest.right / weakest.total * 100)}%。`
+        : '各块正确率都在 80% 以上了，可以往上冲更难的技能。';
 
   main.innerHTML = `
     <div class="crumbs"><a data-go="home">领域总览</a> / <span>我的数据</span></div>
@@ -1375,6 +1408,9 @@ document.getElementById('main').addEventListener('click', e => {
   const play = e.target.closest('[data-play]');
   if (play){ playVideo(play.dataset.play, play.dataset.slot); return; }
 
+  const gs = e.target.closest('[data-goto-skill]');
+  if (gs){ goSkill(gs.dataset.gotoSkill); return; }
+
   const st = e.target.closest('[data-start]');
   if (st){ startQuiz(st.dataset.start); return; }
 
@@ -1474,6 +1510,8 @@ function quitQuiz(){
 }
 
 document.getElementById('panel').addEventListener('click', e => {
+  const gs = e.target.closest('[data-goto-skill]');
+  if (gs){ goSkill(gs.dataset.gotoSkill); return; }
   if (e.target.closest('[data-close-panel]')){
     state.selected = null;
     document.body.classList.remove('panel-open');
