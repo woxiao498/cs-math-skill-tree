@@ -322,7 +322,11 @@ const dueWrong = () => state.wrong.filter(w => w.due <= Date.now());
 /* 这个技能该看哪些视频：技能级优先，没有就用领域级兜底 */
 /* 这两个技能没有对口的视频，领域兜底也跟本课无关（p4 韦达定理 ↔ 基础运算）。
  * 宁可写「这一课还没找到合适的视频」，也不拿领域入门片充数 —— 点进去发现讲的是别的东西，比没有更糟。 */
-const NO_FALLBACK_VIDEO = new Set(['p4', 't8']);
+/* 这些技能没有对口的视频，允许「留空」，不要退回到领域兜底 ——
+   兜底里是整章的大合集，点开发现讲的根本不是这一课，比空着更糟。
+   （p7 比例、p8 三角形：兜底是基础运算；f8 平移：兜底不含平移；
+     g9 两圆位置：兜底第二条是直线方程）*/
+const NO_FALLBACK_VIDEO = new Set(['p4', 't8', 'p7', 'p8', 'f8', 'g9']);
 
 function fmtSec(s){
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
