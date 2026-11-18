@@ -324,12 +324,28 @@ const dueWrong = () => state.wrong.filter(w => w.due <= Date.now());
  * 宁可写「这一课还没找到合适的视频」，也不拿领域入门片充数 —— 点进去发现讲的是别的东西，比没有更糟。 */
 const NO_FALLBACK_VIDEO = new Set(['p4', 't8']);
 
+function fmtSec(s){
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+/* 一条视频可能是「BV 号整段」（1.0 时代）也可能是「源#分P」（2.0 的某一集），
+   统一成同一个形状，上层不用管是哪种。 */
+function videoItem(key){
+  if (key.includes('#')){
+    const [srcKey, pageStr] = key.split('#');
+    const s = VIDEO_SRC[srcKey], pg = VIDEO_PAGE[key];
+    if (!s || !pg) return null;
+    return { bv: s.bv, page: +pageStr, t: pg[0], up: s.up, dur: fmtSec(pg[1]), srcName: s.name, play: '' };
+  }
+  return VIDEO_INFO[key] ? { bv: key, ...VIDEO_INFO[key] } : null;
+}
+
 function videoList(id){
-  let bvs;
-  if (SKILL_VIDEO[id]) bvs = SKILL_VIDEO[id];
-  else if (NO_FALLBACK_VIDEO.has(id)) bvs = [];
-  else bvs = DOMAIN_VIDEO[byId[id].d] || [];
-  return bvs.map(bv => VIDEO_INFO[bv] ? { bv, ...VIDEO_INFO[bv] } : null).filter(Boolean);
+  let keys;
+  if (SKILL_VIDEO[id]) keys = SKILL_VIDEO[id];
+  else if (NO_FALLBACK_VIDEO.has(id)) keys = [];
+  else keys = DOMAIN_VIDEO[byId[id].d] || [];
+  return keys.map(videoItem).filter(Boolean);
 }
 
 /* =======================================================================
@@ -919,10 +935,12 @@ function renderPanel(){
     ${vids.length ? vids.map(v => `
       <div class="vcard">
         <div class="vtitle">${escHtml(v.t)}</div>
-        <div class="vmeta">${escHtml(v.up)} · ${v.dur}${v.play ? ' · ' + v.play + '播放' : ''}</div>
+        <div class="vmeta">${v.srcName
+          ? escHtml(v.srcName) + ' · 第 ' + v.page + ' P · ' + v.dur
+          : escHtml(v.up) + ' · ' + v.dur + (v.play ? ' · ' + v.play + '播放' : '')}</div>
         <div class="vbtns">
-          <button class="btn mini" data-play="${v.bv}">在本页看</button>
-          <a class="btn mini" href="https://www.bilibili.com/video/${v.bv}" target="_blank" rel="noopener noreferrer">去 B站</a>
+          <button class="btn mini" data-play="${v.bv}" data-page="${v.page || ''}">在本页看</button>
+          <a class="btn mini" href="https://www.bilibili.com/video/${v.bv}${v.page ? '?p=' + v.page : ''}" target="_blank" rel="noopener noreferrer">去 B站</a>
         </div>
       </div>`).join('') : '<div style="font-size:12px;color:var(--txt3)">这一课还没找到合适的视频</div>'}
     <div id="player-slot"></div>
@@ -1446,12 +1464,12 @@ function renderPapers(){
 }
 
 /* 点「在本页看」才插 iframe，避免一进页面就加载一堆播放器 */
-function playVideo(bv, slotId){
+function playVideo(bv, page, slotId){
   const slot = document.getElementById(slotId || 'player-slot');
   if (!slot) return;
   slot.innerHTML = `
     <div class="player">
-      <iframe src="https://player.bilibili.com/player.html?bvid=${bv}&autoplay=0&danmaku=0&high_quality=1"
+      <iframe src="https://player.bilibili.com/player.html?bvid=${bv}${page ? '&page=' + page : ''}&autoplay=0&danmaku=0&high_quality=1"
         scrolling="no" frameborder="0" allowfullscreen="true"></iframe>
       <div class="phint">播不出来就是 UP 主关了外嵌，点上面「去 B站」。</div>
     </div>`;
@@ -2031,7 +2049,7 @@ document.getElementById('main').addEventListener('click', e => {
     return;
   }
   const play = e.target.closest('[data-play]');
-  if (play){ playVideo(play.dataset.play, play.dataset.slot); return; }
+  if (play){ playVideo(play.dataset.play, play.dataset.page, play.dataset.slot); return; }
 
   const gs = e.target.closest('[data-goto-skill]');
   if (gs){ goSkill(gs.dataset.gotoSkill); return; }
@@ -2284,7 +2302,7 @@ document.getElementById('panel').addEventListener('click', e => {
     return;
   }
   const play = e.target.closest('[data-play]');
-  if (play){ playVideo(play.dataset.play, play.dataset.slot); return; }
+  if (play){ playVideo(play.dataset.play, play.dataset.page, play.dataset.slot); return; }
 
   const chip = e.target.closest('[data-skill]');
   if (chip && !e.target.closest('[data-act]')){ selectSkill(chip.dataset.skill); return; }

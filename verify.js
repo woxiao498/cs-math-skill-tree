@@ -11,8 +11,8 @@ const ctx = vm.createContext({ console });
 for (const f of ['data.js', 'soft-pre.js', 'quiz.js', 'videos.js', 'pits.js']) {
   vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx, { filename: f });
 }
-vm.runInContext('globalThis.__D = { EXAM, DOMAINS, SKILLS, SOFT_PRE, QUIZ, VIDEO_INFO, DOMAIN_VIDEO, SKILL_VIDEO, PAPERS, PIT }', ctx);
-const { EXAM, DOMAINS, SKILLS, SOFT_PRE, QUIZ, VIDEO_INFO, DOMAIN_VIDEO, SKILL_VIDEO, PAPERS, PIT } = ctx.__D;
+vm.runInContext('globalThis.__D = { EXAM, DOMAINS, SKILLS, SOFT_PRE, QUIZ, VIDEO_INFO, VIDEO_SRC, VIDEO_PAGE, DOMAIN_VIDEO, SKILL_VIDEO, PAPERS, PIT }', ctx);
+const { EXAM, DOMAINS, SKILLS, SOFT_PRE, QUIZ, VIDEO_INFO, VIDEO_SRC, VIDEO_PAGE, DOMAIN_VIDEO, SKILL_VIDEO, PAPERS, PIT } = ctx.__D;
 
 let bad = 0;
 const fail = (m) => { console.error('  ✗ ' + m); bad++; };
@@ -104,8 +104,14 @@ for (const [k, arr] of Object.entries(QUIZ)) {
 }
 
 // 10. 视频引用必须都指向 VIDEO_INFO 里存在的条目
-const checkBv = (bv, where) => {
-  if (!VIDEO_INFO[bv]) fail(`${where} 引用了 VIDEO_INFO 里没有的 ${bv}`);
+const checkBv = (ref, where) => {
+  if (typeof ref === 'string' && ref.includes('#')){
+    const [sid, page] = ref.split('#');
+    if (!VIDEO_SRC[sid]) fail(`${where} 引用了不存在的视频源 ${sid}`);
+    else if (!VIDEO_PAGE[ref]) fail(`${where} 引用了不存在的分P ${ref}`);
+    return;
+  }
+  if (!VIDEO_INFO[ref]) fail(`${where} 引用了 VIDEO_INFO 里没有的 ${ref}`);
 };
 Object.entries(SKILL_VIDEO).forEach(([sid, arr]) => {
   if (!byId[sid]) fail(`SKILL_VIDEO 里的 ${sid} 不是有效技能`);
