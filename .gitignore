@@ -4,6 +4,8 @@ REVIEW-*.md
 REVIEW-feedback.md
 
 # 临时文件
+_preview/
+_*.png
 _*.html
 _*.js
 _review.txt
