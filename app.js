@@ -115,7 +115,12 @@ function pickNextStep(id){
   if (!kids.length) return null;
   const ready = kids.filter(k => isUnlocked(k));
   const pool = (ready.length ? ready : kids).slice();
+  const myDom = byId[id].d;
   pool.sort((a, b) => {
+    // 先给同领域：刚学完数与式，下一步该是整式运算，不是跨到统计去算方差
+    const sa = byId[a].d === myDom ? 0 : 1;
+    const sb = byId[b].d === myDom ? 0 : 1;
+    if (sa !== sb) return sa - sb;
     const la = LV_ORDER[byId[a].lv], lb = LV_ORDER[byId[b].lv];
     if (la !== lb) return la - lb;
     return stepOf(a) - stepOf(b);
@@ -1824,7 +1829,9 @@ function renderStats(){
     .map(s => ({ s, st: state.stats[s.id] }))
     .filter(x => x.st && x.st.total >= 2)
     .map(x => ({ ...x, rate: x.st.right / x.st.total }))
-    .filter(x => x.rate < 1)
+    // 已经点亮的课不列「最该补」——不然上面说「点亮了」、下面说「最该补它」，
+    // 两句话只能信一句，那这页就废了
+    .filter(x => x.rate < 1 && !state.lit.has(x.s.id))
     .sort((a, b) => a.rate - b.rate || b.st.total - a.st.total)
     .slice(0, 5);
 
@@ -2510,7 +2517,8 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   if (p.has('mock')) setTimeout(() => startMock(p.get('mock') === 'basic' ? 'basic' : 'full'), 120);
   // ?demoStats=1 —— 造点做题记录，方便看数据页
   if (p.has('demoStats')){
-    const demo = { s3: [3, 3], i3: [2, 3], t9: [1, 3], g8: [2, 2], r6: [1, 2], q2: [2, 2] };
+    // p1 是「点亮了但只有 67%」的场景：它不该出现在「最该补」里
+    const demo = { s3: [3, 3], i3: [2, 3], t9: [1, 3], g8: [2, 2], r6: [1, 2], q2: [2, 2], p1: [2, 3] };
     Object.entries(demo).forEach(([sid, [r, t]]) => { state.stats[sid] = { right: r, total: t }; });
     ['p1', 'p2', 's1', 's2', 's3', 'i2'].forEach(x => state.lit.add(x));
     state.streak = { days: 5, last: localDate(0) };
