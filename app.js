@@ -880,11 +880,11 @@ function renderPanel(){
         return `<span class="chip ${ok ? 'ok' : 'miss'} ${soft ? 'soft' : ''}" data-skill="${p}" tabindex="0" role="button"
           title="${soft ? '推荐前置' : '必须前置'}">${state.lit.has(p) ? '✓' : '·'} ${byId[p].n}${soft ? ' (推荐)' : ''}</span>`;
       }).join('')
-    : '<span style="font-size:12px;color:#5f7085">无前置，这是起点</span>';
+    : '<span style="font-size:12px;color:var(--txt3)">无前置，这是起点</span>';
 
   const kidChips = kids.length
     ? kids.map(k => `<span class="chip" data-skill="${k}">${byId[k].n}</span>`).join('')
-    : '<span style="font-size:12px;color:#5f7085">没有必修它的下游</span>';
+    : '<span style="font-size:12px;color:var(--txt3)">没有必修它的下游</span>';
 
   panel.innerHTML = `
     <div class="panel-grip"></div>
@@ -919,7 +919,7 @@ function renderPanel(){
           <button class="btn mini" data-play="${v.bv}">在本页看</button>
           <a class="btn mini" href="https://www.bilibili.com/video/${v.bv}" target="_blank" rel="noopener noreferrer">去 B站</a>
         </div>
-      </div>`).join('') : '<div style="font-size:12px;color:#5f7085">这一课还没找到合适的视频</div>'}
+      </div>`).join('') : '<div style="font-size:12px;color:var(--txt3)">这一课还没找到合适的视频</div>'}
     <div id="player-slot"></div>
 
     <div class="p-sec">前置</div>
@@ -1860,7 +1860,7 @@ function renderStats(){
 
     <div style="margin-top:32px;padding-top:16px;border-top:1px solid #1b2431">
       <button class="btn" data-reset style="border-color:#5c2f28;color:#c9705f">清空这台设备上的所有进度</button>
-      <span style="font-size:11.5px;color:#5f7085;margin-left:10px">清空后没有撤销键，建议先点顶栏「导出」备份</span>
+      <span style="font-size:11.5px;color:var(--txt3);margin-left:10px">清空后没有撤销键，建议先点顶栏「导出」备份</span>
     </div>
   `;
 }
