@@ -375,10 +375,16 @@ function pickTodaySkill(){
     (state.showSkippable || s.lv !== 'D')
   );
   if (!ready.length) return null;
-  // 先按深浅（步数小的先），再按重要度 —— 打地基优先，别一上来就推 A 级的难题
+  // 先按深浅（步数小的先），再按领域先后，最后才比等级。
+  // 之前是「步数 → 等级」，结果 r10 升到 A 级后把 p2 顶掉了 —— 刚点亮「数与式的运算」，
+  // 首页却推「均值、方差与标准差」，跟结算页说的「下一步整式运算」打架。
+  // 地基在 DOMAINS 里排最前，按领域顺序就能保证「同一层里先补前面的」。
   ready.sort((a, b) => {
     const sa = stepOf(a.id), sb = stepOf(b.id);
     if (sa !== sb) return sa - sb;
+    const da = DOMAINS.findIndex(d => d.id === a.d);
+    const db = DOMAINS.findIndex(d => d.id === b.d);
+    if (da !== db) return da - db;
     return LV_ORDER[a.lv] - LV_ORDER[b.lv];
   });
   return ready[0].id;
@@ -447,7 +453,7 @@ function renderHome(){
         if (!tid){
           const litN = SKILLS.filter(s => state.lit.has(s.id)).length;
           return `<div class="flabel">${litN ? '全都点亮了' : '没有能直接开始的课'}</div>
-            <div class="fmeta">${litN ? '可以去「重要度排行」回头看哪块还不熟。' : '前置还没齐，去下面从头挑一个。'}</div>`;
+            <div class="fmeta">${litN ? '可以去「重要度排行」回头看哪块还不熟。' : '要先学的还没点亮，去下面从头挑一个。'}</div>`;
         }
         const ts = byId[tid];
         const mins = Math.max(2, Math.round(QUIZ[tid].length * 1.2));
@@ -493,7 +499,7 @@ function renderDomainList(d, vis, hiddenCount){
       const unlocked = isUnlocked(s.id);
       const q = (s.q || []).length ? s.q.join('·') : '可不学';
       const missN = hardPre(s.id).filter(p => !state.lit.has(p)).length;
-      const subText = (!lit && missN) ? `差 ${missN} 个前置` : q;
+      const subText = (!lit && missN) ? `还差 ${missN} 课` : q;
       return `<div class="lcard ${lit ? 'lit' : ''} ${unlocked ? '' : 'locked'}"
                    data-skill="${s.id}" tabindex="0" role="button">
         <div class="ltop">
@@ -610,7 +616,7 @@ function renderDomain(domId){
     const q = (s.q || []).length ? s.q.join('·') : '可不学';
     // 锁定态要能一眼看出「差几个前置」，不然和「没学过」分不开
     const missN = hardPre(s.id).filter(p => !state.lit.has(p)).length;
-    const subText = (!lit && missN) ? `差 ${missN} 个前置` : q;
+    const subText = (!lit && missN) ? `还差 ${missN} 课` : q;
     return `
       <div class="${cls}" data-skill="${s.id}" tabindex="0" role="button"
            style="left:${p0.x}px;top:${p0.y}px;width:${W}px;height:${H}px;--nc:${d.color}">
@@ -638,12 +644,12 @@ function renderDomain(domId){
     <div class="legend legend-state">
       <span><i class="lg-lit"></i>已点亮</span>
       <span><i class="lg-open"></i>能学，还没点亮</span>
-      <span><i class="lg-lock"></i>前置没齐</span>
+      <span><i class="lg-lock"></i>要先学会前面的</span>
       <span><i class="lg-skip"></i>可跳过</span>
     </div>
     <div class="legend" style="margin-top:-6px">
-      <span><i></i>实线=必须前置</span>
-      <span><i class="dash"></i>虚线=推荐前置（没有也能学）</span>
+      <span><i></i>实线=必须先学</span>
+      <span><i class="dash"></i>虚线=推荐先学（不学也能做）</span>
       <span><span class="kbd">点节点</span> 亮出整条前置链</span>
     </div>
     <div class="legend" style="margin-top:-8px">
@@ -878,7 +884,7 @@ function renderPanel(){
   const panel = document.getElementById('panel');
   const id = state.selected;
   if (!id || !byId[id]){
-    panel.innerHTML = `<div class="empty">左边点一个技能<br><span>看它的前置、知识点、掌握标准和常见坑</span></div>`;
+    panel.innerHTML = `<div class="empty">左边点一个技能<br><span>看它要先学什么、考到什么程度、坑在哪</span></div>`;
     return;
   }
   const s = byId[id];
@@ -903,9 +909,9 @@ function renderPanel(){
         const soft = softs.includes(p);
         const ok = state.lit.has(p);
         return `<span class="chip ${ok ? 'ok' : 'miss'} ${soft ? 'soft' : ''}" data-skill="${p}" tabindex="0" role="button"
-          title="${soft ? '推荐前置' : '必须前置'}">${state.lit.has(p) ? '✓' : '·'} ${byId[p].n}${soft ? ' (推荐)' : ''}</span>`;
+          title="${soft ? '学会了更好，不学也能做' : '要先学会这一课'}">${ok ? '✓' : '·'} ${byId[p].n}${soft ? ' (推荐)' : ''}</span>`;
       }).join('')
-    : '<span style="font-size:12px;color:var(--txt3)">无前置，这是起点</span>';
+    : '<span style="font-size:12px;color:var(--txt3)">不用先学别的，从这里开始</span>';
 
   const kidChips = kids.length
     ? kids.map(k => `<span class="chip" data-skill="${k}">${byId[k].n}</span>`).join('')
@@ -925,8 +931,10 @@ function renderPanel(){
       ${qTags}
     </div>
 
-    <div class="p-sec">知识点</div>
-    <ul class="pts" style="--nc:${d.color}">${pts || '<li>（无）</li>'}</ul>
+    <details class="p-fold">
+      <summary>这课具体要会哪几条（${(s.pts || []).length} 条，有符号，点开看）</summary>
+      <ul class="pts" style="--nc:${d.color}">${pts || '<li>（无）</li>'}</ul>
+    </details>
 
     <div class="p-sec">掌握到什么程度</div>
     <div class="p-how">${s.how}</div>
@@ -949,9 +957,11 @@ function renderPanel(){
       </div>`).join('') : '<div style="font-size:12px;color:var(--txt3)">这一课还没找到合适的视频</div>'}
     <div id="player-slot"></div>
 
-    <div class="p-sec">前置</div>
+    <div class="p-sec">要先学会</div>
     <div class="pre-chips">${preChips}</div>
-    ${miss.length ? `<div style="font-size:11.5px;color:#d69a8a;margin-top:8px">还差 ${miss.map(m => byId[m].n).join('、')} 没点亮，这个技能现在是锁着的。</div>` : ''}
+    ${miss.length
+      ? `<div class="pre-tip">要先学会 ${miss.map(m => `<b data-skill="${m}">${byId[m].n}</b>`).join('、')}，这一课才开得动 —— <span style="color:#93a3b8">点名字直接去做</span>。</div>`
+      : ''}
 
     <div class="p-sec">点亮它能解锁</div>
     <div class="pre-chips">${kidChips}</div>
@@ -961,8 +971,8 @@ function renderPanel(){
       ${lit
         ? `<button class="btn lit" data-act="toggle">已点亮 · 点此取消</button>`
         : q
-          ? `<button class="btn primary" data-act="quiz">${unlocked ? `开始结业挑战（${QUIZ[id].length} 题）` : '先做做看（前置没齐，过了也不算点亮）'}</button>`
-          : `<button class="btn primary" data-act="toggle" ${unlocked ? '' : 'disabled'}>${unlocked ? '点亮它（这课没配题）' : '前置没齐'}</button>`}
+          ? `<button class="btn primary" data-act="quiz">${unlocked ? `开始结业挑战（${QUIZ[id].length} 题）` : '先做做看（要先学的那几课没点亮，做对也不算）'}</button>`
+          : `<button class="btn primary" data-act="toggle" ${unlocked ? '' : 'disabled'}>${unlocked ? '点亮它（这课没配题）' : '要先学会前面的课'}</button>`}
       <button class="btn" data-act="goal">设为目标</button>
     </div>
     ${q ? `<div class="p-hint">${lit ? '已通过结业挑战' : `${quizRule(QUIZ[id].length)}才能点亮${best ? ` · 你目前最好成绩 ${Math.round(best * 100)}%` : ''}`}</div>` : ''}

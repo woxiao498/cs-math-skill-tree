@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -321,6 +321,18 @@
   .ltop{display:flex;align-items:center;gap:8px}
   .lnm{font-size:13px;color:#dbe4f0;font-weight:560}
   .lsub{font-size:11px;color:#7d92aa;margin-top:3px;padding-left:26px}
+
+  /* ---------- 面板：知识点折叠 ---------- */
+  .p-fold{border:1px solid #1e2938;border-radius:8px;padding:0;margin-bottom:14px;background:#0f1620}
+  .p-fold summary{cursor:pointer;padding:9px 12px;font-size:11.5px;color:#8494a8;
+    list-style:none;display:flex;align-items:center;gap:6px}
+  .p-fold summary::-webkit-details-marker{display:none}
+  .p-fold summary::before{content:"▸";color:#5b7a99;font-size:10px;flex:0 0 auto}
+  .p-fold[open] summary::before{content:"▾"}
+  .p-fold summary:hover{color:#a9bcd0}
+  .p-fold .pts{margin:0 12px 11px}
+  .pre-tip{margin-top:9px;font-size:11.5px;color:#d69a8a;line-height:1.7}
+  .pre-tip b{color:#e8b0a0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 
   /* ---------- 易错点 ---------- */
   .pit-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
