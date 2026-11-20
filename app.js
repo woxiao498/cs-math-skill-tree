@@ -203,6 +203,15 @@ function save(){
     }));
   }catch(e){ /* file:// 下个别浏览器禁写，忽略，进度仍存在内存里 */ }
 }
+// 换过的题不能继承旧题的错题排期或易错点通过记录；整课点亮和成绩不动。
+function sameQuestion(w){
+  const q = w && Number.isInteger(w.qi) && Array.isArray(QUIZ[w.sid]) && QUIZ[w.sid][w.qi];
+  return !!q && (w.rev || 0) === (q.rev || 0);
+}
+function pitQuestionKey(sid, qi){
+  const rev = QUIZ[sid][qi].rev;
+  return rev ? sid + ':' + qi + ':v' + rev : sid + ':' + qi;
+}
 function load(){
   try{
     const raw = localStorage.getItem(KEY) || localStorage.getItem(OLD_KEY);
@@ -211,7 +220,7 @@ function load(){
     (d.lit || []).forEach(x => byId[x] && state.lit.add(x));
     state.goal = d.goal && byId[d.goal] ? d.goal : null;
     state.showSkippable = !!d.showSkippable;
-    state.wrong = (d.wrong || []).filter(w => byId[w.sid] && QUIZ[w.sid] && QUIZ[w.sid][w.qi]);
+    state.wrong = (d.wrong || []).filter(sameQuestion);
     state.progress = d.progress || {};
     state.stats = d.stats || {};
     state.unlitSet = new Set((d.unlit || []).filter(x => byId[x]));
@@ -313,7 +322,7 @@ function scheduleWrong(sid, qi, correct){
       state.wrong[i].due = Date.now() + REVIEW_GAP[0] * 864e5;
       state.wrong[i].ts = Date.now();
     } else {
-      state.wrong.push({ sid, qi, stage: 0, due: Date.now() + REVIEW_GAP[0] * 864e5, ts: Date.now() });
+      state.wrong.push({ sid, qi, rev: QUIZ[sid][qi].rev || 0, stage: 0, due: Date.now() + REVIEW_GAP[0] * 864e5, ts: Date.now() });
     }
   }
 }
@@ -1013,7 +1022,7 @@ function answerQuiz(oi){
   // 从易错点进来练的，答对就记下「这个坑这一道过了」
   if (z.solo && z.pitContext && oi === q.a){
     state.pitDone[z.pitContext] = state.pitDone[z.pitContext] || {};
-    state.pitDone[z.pitContext][z.sid + ':' + z.i] = true;
+    state.pitDone[z.pitContext][pitQuestionKey(z.sid, qi)] = true;
     save();
   }
   // 单题订正：不自动跳，让学生看完解析再点「订正完了」
@@ -1251,11 +1260,11 @@ function fmtClock(s){
 
 function mockScore(){
   const m = state.mock, p = m.paper;
-  let pts = 0, rightChoice = 0;
-  p.choice.forEach((x, i) => { if (m.ans[i] === x.q.a){ pts += 5; rightChoice++; } });
-  p.fill.forEach((q, i) => { if (m.fillSelf[i] === true) pts += 5; });
-  p.solve.forEach((q, i) => { if (m.solveSelf[i] === true) pts += (q.pts || 12); });
-  return { pts, rightChoice };
+  const rightChoice = p.choice.filter((x, i) => m.ans[i] === x.q.a).length;
+  const choicePts = rightChoice * 5;
+  const fillPts = p.fill.reduce((sum, q, i) => sum + (m.fillSelf[i] === true ? 5 : 0), 0);
+  const solvePts = p.solve.reduce((sum, q, i) => sum + (m.solveSelf[i] === true ? (q.pts || 12) : 0), 0);
+  return { pts: choicePts + fillPts + solvePts, rightChoice, choicePts, fillPts, solvePts };
 }
 
 function finishMock(){
@@ -1263,7 +1272,9 @@ function finishMock(){
   state.mock.done = true;
   // 错的选择题进错题本，模拟卷才不是白做。choice 元素是 { sid, i, q }
   state.mock.paper.choice.forEach((x, idx) => {
-    if (state.mock.ans[idx] !== null && state.mock.ans[idx] !== x.q.a) scheduleWrong(x.sid, x.i, false);
+    if (state.mock.ans[idx] != null && state.mock.ans[idx] !== x.q.a && sameQuestion({ sid: x.sid, qi: x.i, rev: x.q.rev })){
+      scheduleWrong(x.sid, x.i, false);
+    }
   });
   save();
   render();
@@ -1295,19 +1306,22 @@ function renderMock(){
     const sc = mockScore();
     const basic = !!m.basic;
     const total = basic ? p.choice.length * 5 : 150;
-    const passLine = basic ? Math.ceil(total * 0.6) : 90;
-    const pct = Math.round(sc.pts / total * 100);
+    const passLine = Math.ceil(total * 0.6);
     const wrongChoice = p.choice.map((x, i) => ({ i, x })).filter(o => m.ans[o.i] !== o.x.q.a);
     main.innerHTML = `
       <div class="crumbs"><a data-go="home">领域总览</a> / <span>${basic ? '地基卷结果' : '模拟考结果'}</span></div>
       <div class="quiz-result">
-        <div class="qr-score ${sc.pts >= passLine ? 'ok' : 'no'}">${sc.pts}<span class="mk-of"> / ${total}</span></div>
-        <div class="qr-line">答对 ${sc.rightChoice} / ${p.choice.length} 道${basic
-          ? (sc.pts >= passLine ? ' · 这些课你都过了' : ` · 及格线是 ${passLine} 分`)
-          : (sc.pts >= passLine ? ' · 及格线以上' : ' · 还没到 90 分线')}</div>
-        <div class="qr-msg">${basic
-          ? '这张卷子只从你点亮过、或者前置已经齐了的课里出题，所以它测的是「学过的会不会」，不是「能考几分」。'
-          : `选择题自动判（${sc.rightChoice} / ${p.choice.length} 对，得 ${sc.rightChoice * 5} 分）；填空和解答按你自己打的分算。真实考试不能自评，这个分数只能看趋势，别当成真成绩。`}</div>
+        ${basic ? '' : '<div class="mk-est-label">本次估分</div>'}
+        <div class="qr-score${basic ? (sc.pts >= passLine ? ' ok' : ' no') : ''}">${sc.pts}<span class="mk-of"> / ${total}</span></div>
+        ${basic ? `
+          <div class="qr-line">答对 ${sc.rightChoice} / ${p.choice.length} 道${sc.pts >= passLine ? ' · 这些课你都过了' : ` · 及格线是 ${passLine} 分`}</div>
+          <div class="qr-msg">这张卷子只从你点亮过、或者前置已经齐了的课里出题，所以它测的是「学过的会不会」，不是「能考几分」。</div>
+        ` : `
+          <div class="qr-line">选择（自动判）：${sc.choicePts} / 75 分 · 答对 ${sc.rightChoice} / ${p.choice.length} 道<br>
+            填空（自评）：${sc.fillPts} / 25 分 · 解答（自评）：${sc.solvePts} / 50 分</div>
+          <div class="qr-msg mk-est-note"><b>自评手松一点，估分就可能偏高。</b><br>
+            填空只看你原来写的答案；解答对照给分点，没写出来的步骤不算。这里的解答题只记满分或 0 分，考场会按步骤给分。别把这个数当成正式成绩。</div>
+        `}
         ${wrongChoice.length ? `<div class="qr-wrong">
           <div class="qr-wrong-h">选择题错这 ${wrongChoice.length} 道（点开看为什么）</div>
           ${wrongChoice.map(o => `<div class="qr-wrow" data-review>
@@ -1345,9 +1359,9 @@ function renderMock(){
         <div class="mk-ansbody"><b>${q.a}</b><div class="kwhy">${q.why}</div></div>
       </details>
       <div class="mk-self">
-        <span>你写对了吗？</span>
+        <span>对照你原来写的答案：</span>
         <button class="btn mini ${self === true ? 'on' : ''}" data-mock-fill="${i}:1">写对了</button>
-        <button class="btn mini ${self === false ? 'on' : ''}" data-mock-fill="${i}:0">写错了</button>
+        <button class="btn mini ${self === false ? 'on' : ''}" data-mock-fill="${i}:0">错了或没写</button>
       </div>
     </div>`;
   }).join('');
@@ -1356,7 +1370,7 @@ function renderMock(){
     const self = m.solveSelf[i];
     return `<div class="mk-q">
       <div class="mk-qt"><b>${p.choice.length + p.fill.length + i + 1}.</b>（${q.pts || 12} 分）${q.q}</div>
-      <textarea class="mk-input" rows="5" data-mock-text="solve:${i}" placeholder="写解题过程。写完展开答案，按给分点自己估分。">${escHtml(m.solveText[i] || '')}</textarea>
+      <textarea class="mk-input" rows="5" data-mock-text="solve:${i}" placeholder="写解题过程。写完展开答案，对照给分点查漏。">${escHtml(m.solveText[i] || '')}</textarea>
       <details class="mk-ans"><summary>看标准答案和给分点</summary>
         <div class="mk-ansbody"><b>${q.a}</b>
           <div class="kwhy">${q.why}</div>
@@ -1365,9 +1379,9 @@ function renderMock(){
         </div>
       </details>
       <div class="mk-self">
-        <span>这题你能拿几分？</span>
-        <button class="btn mini ${self === 1 ? 'on' : ''}" data-mock-solve="${i}:1">基本写对了</button>
-        <button class="btn mini ${self === 0 ? 'on' : ''}" data-mock-solve="${i}:0">写不出来</button>
+        <span>按你实际写出的步骤判：</span>
+        <button class="btn mini ${self === true ? 'on' : ''}" data-mock-solve="${i}:1">答案和给分点都写对了</button>
+        <button class="btn mini ${self === false ? 'on' : ''}" data-mock-solve="${i}:0">没写全或有错（本卷不计分）</button>
       </div>
     </div>`;
   }).join('');
@@ -1932,7 +1946,7 @@ function renderPits(){
   const rows = PIT.map(p => {
     const qs = questionsOfPit(p.id);
     const rec = (state.pitDone && state.pitDone[p.id]) || {};
-    const passed = qs.filter(x => rec[x.sid + ':' + x.i]).length;
+    const passed = qs.filter(x => rec[pitQuestionKey(x.sid, x.i)]).length;
     const mastered = qs.length > 0 && passed === qs.length;
     return `<div class="pit-card ${mastered ? 'done' : ''}" data-pit="${p.id}" tabindex="0" role="button">
       <div class="pit-h">${mastered ? '✓ ' : ''}${p.name}<span class="pit-n">${mastered ? '已过' : `${passed} / ${qs.length} 道`}</span></div>
@@ -1957,10 +1971,10 @@ function renderPitDetail(pitId){
   if (!p){ state.pitId = null; return renderPits(); }
   const qs = questionsOfPit(pitId);
   const rec = (state.pitDone && state.pitDone[pitId]) || {};
-  const passed = qs.filter(x => rec[x.sid + ':' + x.i]).length;
+  const passed = qs.filter(x => rec[pitQuestionKey(x.sid, x.i)]).length;
   const rows = qs.map(x => {
     const s = byId[x.sid];
-    const ok = !!rec[x.sid + ':' + x.i];
+    const ok = !!rec[pitQuestionKey(x.sid, x.i)];
     const txt = x.q.q.length > 56 ? x.q.q.slice(0, 56) + '…' : x.q.q;
     return `<div class="rank-row ${ok ? 'pit-ok' : ''}" data-pit-q="${x.sid}:${x.i}" tabindex="0" role="button">
       <span class="rank-badge" style="${ok
@@ -1982,6 +1996,23 @@ function renderPitDetail(pitId){
     <div style="margin-top:20px"><button class="btn" data-go="pit">← 回易错点列表</button></div>`;
 }
 
+function renderAbout(){
+  document.getElementById('main').innerHTML = `
+    <div class="crumbs"><a href="#home" data-go="home">领域总览</a> / <span>关于</span></div>
+    <div class="sec-title"><h2 id="about-heading" tabindex="-1">关于数学技能树</h2><span>${SKILLS.length} 课 · ${DOMAINS.length} 个领域 · ${quizCount()} 道练习题</span></div>
+    <div class="about-copy">
+      <p>给广东 3+证书（高职高考）的同学用：先知道该学哪一课，再做几道题看看自己会没会。这里的题都是<strong>自编练习，不是历年原卷</strong>；解析着重讲容易错在哪，不是官方评分标准。</p>
+      <p>数据截至 2026 年 11 月，按 2027 届（2027 年 1 月考试）整理。考纲或题型如果变了，记得对照当年要求。</p>
+      <h3>考情和分值从哪来</h3>
+      <p>卷面结构参考 2021 版《数学科考试说明》（2021 年起不再公布新考纲）；命题依据是《中等职业学校数学课程标准（2020 年版）》。</p>
+      <p><strong>有逐题统计的：</strong>函数、指数与对数、概率与统计，参考《精准备考全程复习方略·数学》的考情分析。概率只拿到 2023～2026 年的数据。</p>
+      <p><strong>还在估算的：</strong>三角、数列、解析几何、向量、集合、不等式、预备知识的分值，参考 2014～2024 年各板块平均分值和近年真题评述，只用来排复习顺序。标「存疑」的地方没有用原卷核实，别当成结论。<a href="https://github.com/woxiao498/cs-math-skill-tree#数据来源">查看详细来源</a>。</p>
+      <p>复数部分参考 2025、2026 年真题评述，以及杨宏英《职教高考数学试题之变的思考与启示》（《广东教育》2025 年第 4 期）。</p>
+      <h3>视频和学习进度</h3>
+      <p>视频来自 B 站公开内容，版权归各 UP 主。进度只存在这台设备的浏览器里，换设备用「更多」里的导出和导入。</p>
+    </div>`;
+}
+
 /* =======================================================================
  *  渲染总入口
  * ======================================================================= */
@@ -1998,6 +2029,7 @@ function renderMain(){
   if (state.view === 'papers') return renderPapers();
   if (state.view === 'paper') return renderPaper();
   if (state.view === 'stats') return renderStats();
+  if (state.view === 'about') return renderAbout();
   return renderHome();
 }
 function render(){
@@ -2047,6 +2079,7 @@ function syncHash(){
     else if (state.view === 'paper') h = '#paper';
     else if (state.view === 'stats') h = '#stats';
     else if (state.view === 'pit') h = '#pit';
+    else if (state.view === 'about') h = '#about';
   }
   if (location.hash === h) return;
   try{ history.replaceState(null, '', location.pathname + location.search + h); }
@@ -2059,6 +2092,10 @@ function syncHash(){
 document.getElementById('main').addEventListener('click', e => {
   const go = e.target.closest('[data-go]');
   if (go){
+    if (go.tagName === 'A' && go.hasAttribute('href')){
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+    }
     goTo(go.dataset.go);
     return;
   }
@@ -2451,7 +2488,7 @@ document.getElementById('btn-export').onclick = () => {
 /* 导入：以前是无条件覆盖，连 stats 都不带，换设备后「我的数据」会清零 */
 function applyImport(d, overwrite){
   const litSet = new Set((d.lit || []).filter(x => byId[x]));
-  const wrongArr = (d.wrong || []).filter(w => byId[w.sid] && QUIZ[w.sid] && QUIZ[w.sid][w.qi]);
+  const wrongArr = (d.wrong || []).filter(sameQuestion);
   const prog = d.progress || {};
   const stats = d.stats || {};
   // 过滤掉 null / 非对象，畸形文件不该把页面打崩
@@ -2577,7 +2614,7 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   if (wr) wr.split(',').forEach(pair => {
     const [sid, qi] = pair.split(':');
     if (byId[sid] && QUIZ[sid] && QUIZ[sid][+qi])
-      state.wrong.push({ sid, qi: +qi, stage: 0, due: Date.now() - 1000, ts: Date.now() });
+      state.wrong.push({ sid, qi: +qi, rev: QUIZ[sid][+qi].rev || 0, stage: 0, due: Date.now() - 1000, ts: Date.now() });
   });
 })();
 
@@ -2620,17 +2657,22 @@ window.addEventListener('resize', () => {
   if (h === 'paper') { state.view = 'paper'; return; }
   if (h === 'stats') { state.view = 'stats'; return; }
   if (h === 'pit') { state.view = 'pit'; return; }
+  if (h === 'about') { state.view = 'about'; return; }
 })();
 
 document.getElementById('exam-line').textContent =
   `${EXAM.total} 分 · ${EXAM.minutes} 分钟 · 15 选择 + 5 填空 + 4 解答`;
-document.getElementById('foot').innerHTML = `
-  广东 3+证书（高职高考）数学技能树 · ${SKILLS.length} 个技能 / ${Object.keys(QUIZ).length} 个技能配了题（共 ${quizCount()} 道）/ ${DOMAINS.length} 个领域<br>
-  <b style="color:#8a9bb0">数据截至 2026 年 11 月，适用 2027 届（2027 年 1 月考试）</b> —— 考纲和题型若有变动，这一版就过时了。<br>
-  <b style="color:#8a7550">练习题全部是自编的仿真题，不是历年原卷</b>；解析按"错在哪"讲，不保证和官方答案一致。<br>
-  卷面结构依据 2021 版《数学科考试说明》（2021 年起考试院不再公布新考纲，命题依据为《中等职业学校数学课程标准（2020 年版）》）。<br>
-  重要度按 2014~2024 各板块平均分值统计与近年真题逐题评述排定。凡标注「存疑」的地方，说明我没能拿到原卷核实 —— 别当结论用。<br>
-  视频链接均为 B站 公开内容，版权归各 UP 主；进度存在本机浏览器里，换设备用「导出 / 导入」。
-`;
+document.getElementById('foot-about').addEventListener('click', e => {
+  if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  if ((state.view === 'quiz' && state.quiz && !state.quiz.done) ||
+      (state.view === 'mock' && state.mock && !state.mock.done)){
+    // 做题中看关于，另开一页，不丢作答。
+    window.open(e.currentTarget.href, '_blank', 'noopener');
+    return;
+  }
+  goTo('about');
+  document.getElementById('about-heading').focus({ preventScroll: true });
+});
 
 render();

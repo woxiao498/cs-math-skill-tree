@@ -255,7 +255,11 @@
     padding:14px 24px 22px;border-top:1px solid var(--line);
     font-size:11px;color:#6b7d92;line-height:1.9;background:#0a0e14;
   }
-  footer a{color:#6a819c}
+  footer a{color:#a9cbef;text-underline-offset:3px;padding:4px 2px}
+  .about-copy{max-width:640px;font-size:14px;line-height:1.8;color:var(--txt2)}
+  .about-copy p{margin:0 0 12px}
+  .about-copy h3{font-size:15px;color:var(--txt);margin:22px 0 6px}
+  .about-copy a{color:#a9cbef;text-underline-offset:3px}
   .kbd{font-size:10.5px;padding:1px 5px;border:1px solid #2a3646;border-radius:4px;color:#8496ad}
 
   
@@ -522,6 +526,9 @@
   .qr-redo{flex:0 0 auto;align-self:flex-start;font-size:11px;padding:5px 10px}
 
   /* ---------- 模拟考 ---------- */
+  .mk-est-label{font-size:14px;color:#b9c8d8;margin-bottom:6px}
+  .mk-est-note{max-width:420px;text-align:left;margin:0 auto;padding:10px 12px;border:1px solid #54462d;
+    border-radius:8px;background:#1a1710;color:#ded0b5}
   .mk-bar{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;
     gap:14px;flex-wrap:wrap;padding:11px 16px;margin:-6px 0 18px;border-radius:10px;
     background:rgba(16,22,31,.94);border:1px solid #2a4364;backdrop-filter:blur(6px)}
@@ -739,7 +746,7 @@
   </aside>
 </div>
 
-<footer id="foot"></footer>
+<footer id="foot">自编练习题，非官方真题 · 数据截至 2026 年 11 月 · <a id="foot-about" href="#about">关于</a></footer>
 
 <script src="data.js"></script>
 <script src="soft-pre.js"></script>

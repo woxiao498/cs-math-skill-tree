@@ -98,7 +98,8 @@ for (const [k, arr] of Object.entries(QUIZ)) {
     if (!q.q) fail(`${tag} 缺题干`);
     if (!Array.isArray(q.o) || q.o.length !== 4) fail(`${tag} 选项不是 4 个`);
     if (new Set(q.o).size !== 4) fail(`${tag} 选项有重复`);
-    if (typeof q.a !== 'number' || q.a < 0 || q.a > 3) fail(`${tag} 答案索引 ${q.a} 越界`);
+    if (q.a !== 0) fail(`${tag} 正确选项必须写在第一个（a: 0）`);
+    if (q.rev != null && (!Number.isInteger(q.rev) || q.rev < 1)) fail(`${tag} 换题版本 rev 必须是正整数`);
     if (!q.why || q.why.length < 8) fail(`${tag} 解析太短或缺失`);
   });
 }
