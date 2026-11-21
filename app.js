@@ -632,8 +632,8 @@ function renderDomain(domId){
         <span class="dot"></span>
         <div class="nm">${s.n}</div>
         <div class="sub">${s.d === 'prep'
-          ? `<span class="rank-badge" style="height:15px;min-width:15px;font-size:9px;background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d">基</span>`
-          : `<span class="rank-badge lv-${s.lv}" style="height:15px;min-width:15px;font-size:9px">${s.lv}</span>`}<span>${subText}</span></div>
+          ? `<span class="rank-badge" style="height:17px;min-width:17px;background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d">基</span>`
+          : `<span class="rank-badge lv-${s.lv}" style="height:17px;min-width:17px">${s.lv}</span>`}<span>${subText}</span></div>
       </div>`;
   }).join('');
 
@@ -724,7 +724,7 @@ function renderRank(){
         ? `<span class="rank-badge" style="background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d;white-space:nowrap">基</span>`
         : `<span class="rank-badge lv-${s.lv}">${s.lv}</span>`}
       <span class="nm">${s.n}</span>
-      <span class="dom" style="color:${d.color}88">${d.short}</span>
+      <span class="dom">${d.short}</span>
       <span class="how">${s.how}</span>
       <span class="qtags">${q}</span>
     </div>`;
@@ -807,7 +807,7 @@ function renderSearch(){
     return `<div class="rank-row" data-skill="${s.id}" tabindex="0" role="button">
       <span class="rank-badge lv-${s.lv}">${s.lv}</span>
       <span class="nm">${s.n}</span>
-      <span class="dom" style="color:${d.color}88">${d.short}</span>
+      <span class="dom">${d.short}</span>
       <span class="how">${s.how}</span>
     </div>`;
   }).join('');
@@ -861,8 +861,8 @@ function renderPlan(){
       <div class="no">${lit ? '✓' : i + 1}</div>
       <div class="body">
         <div class="t">${s.n} ${s.d === 'prep'
-          ? `<span class="rank-badge" style="height:15px;min-width:15px;font-size:9px;background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d">基</span>`
-          : `<span class="rank-badge lv-${s.lv}" style="height:15px;min-width:15px;font-size:9px">${s.lv}</span>`}</div>
+          ? `<span class="rank-badge" style="height:17px;min-width:17px;background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d">基</span>`
+          : `<span class="rank-badge lv-${s.lv}" style="height:17px;min-width:17px">${s.lv}</span>`}</div>
         <div class="d">${d.name} · 第 ${stepOf(id)} 步 · ${(s.q || []).join('/') || '可不学'}</div>
       </div>
     </div>`;
@@ -934,9 +934,9 @@ function renderPanel(){
     <div class="p-row">
       ${s.d === 'prep'
         ? `<span class="rank-badge" style="background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d;white-space:nowrap">地基</span>
-           <span style="font-size:11.5px;color:#8fa8c4">不出独立考题，但必须会</span>`
+           <span style="font-size:12px;color:#8fa8c4">不出独立考题，但必须会</span>`
         : `<span class="rank-badge lv-${s.lv}">${s.lv}</span>
-           <span style="font-size:11.5px;color:#93a3b8">${({A:'主力，必考',B:'常考',C:'边缘',D:'可跳过'})[s.lv]}</span>`}
+           <span style="font-size:12px;color:#93a3b8">${({A:'主力，必考',B:'常考',C:'边缘',D:'可跳过'})[s.lv]}</span>`}
       ${qTags}
     </div>
 
@@ -986,7 +986,7 @@ function renderPanel(){
     </div>
     ${q ? `<div class="p-hint">${lit ? '已通过结业挑战' : `${quizRule(QUIZ[id].length)}才能点亮${best ? ` · 你目前最好成绩 ${Math.round(best * 100)}%` : ''}`}</div>` : ''}
     ${state.goal === id
-      ? `<div style="font-size:11.5px;color:#7ed4a3;margin-top:6px">当前目标就是它 ·
+      ? `<div style="font-size:12px;color:#a9cbef;margin-top:6px">当前目标就是它 ·
            <a data-goal-clear style="color:#7fb0e8;cursor:pointer;text-decoration:underline">取消目标</a></div>`
       : ''}
   `;
@@ -1773,7 +1773,7 @@ function renderPaper(){
       <div class="kgroup"><b>一、选择题</b><div>${p.choice.map((x, i) => `${i + 1}. ${'ABCD'[x.q.a]}`).join('　')}</div></div>
       ${p.fill.length ? `<div class="kgroup"><b>二、填空题</b><div>${p.fill.map((q, i) => `${off + 1 + i}. ${q.a}`).join('　｜　')}</div></div>` : ''}
       ${p.solve.length ? `<div class="kgroup"><b>三、解答题</b>${p.solve.map((q, i) => `<div class="kitem"><b>${off + p.fill.length + 1 + i}.</b>（${q.pts || 12} 分）${q.a}<div class="kwhy">${q.why}</div>${q.steps ? `<div class="ksteps">给分点：${q.steps}</div>` : ''}${q.std ? `<details class="kstd"><summary>标准写法 —— 照着这个写才拿得到分</summary><div>${q.std}</div></details>` : ''}</div>`).join('')}</div>` : ''}
-      <div class="kgroup"><b>每题对应技能</b><div style="font-size:11.5px;color:#666">${p.choice.map((x, i) => `${i + 1}.${byId[x.sid].n}`).join('　')}</div></div>
+      <div class="kgroup"><b>每题对应技能</b><div style="font-size:12px;color:#666">${p.choice.map((x, i) => `${i + 1}.${byId[x.sid].n}`).join('　')}</div></div>
     </div>`;
 
   main.innerHTML = `
@@ -1789,7 +1789,7 @@ function renderPaper(){
       ${isWrong
         ? `这份卷子是从你的错题本里取的，共 ${p.choice.length} 道选择题，按「该复习的先后」排好了。<br>做的时候先别看答案，做完点「显示答案」再对。`
         : `15 选择 + 5 填空 + 4 解答，共 150 分、120 分钟，结构和真卷一致。<br>
-      <b style="color:#b9a06a">题目是自编的，不是历年原卷</b> —— 真题原卷我没有，也不适合转存到公开仓库。`}
+      <b style="color:var(--txt)">题目是自编的，不是历年原卷</b> —— 真题原卷我没有，也不适合转存到公开仓库。`}
       <br>打印时可以选「另存为 PDF」，手机上用浏览器分享 → 打印也行。
     </div>
 
@@ -1887,9 +1887,9 @@ function renderStats(){
     return `<div class="rank-row" data-skill="${x.s.id}" tabindex="0" role="button">
       <span class="rank-badge lv-${x.s.lv}">${x.s.lv}</span>
       <span class="nm">${x.s.n}</span>
-      <span class="dom" style="color:${d.color}88">${d.short}</span>
+      <span class="dom">${d.short}</span>
       <span class="how">做过 ${x.st.total} 题，对 ${x.st.right} 题</span>
-      <span class="qtags"><span class="weak-rate" style="color:${p >= 80 ? '#6fc79a' : p >= 60 ? '#d6a95c' : '#d08070'}">${p}%</span></span>
+      <span class="qtags"><span class="weak-rate" style="color:${p >= 80 ? 'var(--ok-text)' : p >= 60 ? 'var(--txt2)' : 'var(--bad-text)'}">${p}%</span></span>
     </div>`;
   }).join('');
 
@@ -1922,8 +1922,8 @@ function renderStats(){
       <div class="slist dim">${untested.map(rowHtml).join('')}</div>` : ''}
 
     <div style="margin-top:32px;padding-top:16px;border-top:1px solid #1b2431">
-      <button class="btn" data-reset style="border-color:#5c2f28;color:#c9705f">清空这台设备上的所有进度</button>
-      <span style="font-size:11.5px;color:var(--txt3);margin-left:10px">清空后没有撤销键，建议先点顶栏「导出」备份</span>
+      <button class="btn" data-reset style="border-color:#4d5b6f;color:var(--txt)">清空这台设备上的所有进度</button>
+      <span style="font-size:12px;color:var(--txt3);margin-left:10px">清空后没有撤销键，建议先点顶栏「导出」备份</span>
     </div>
   `;
 }
@@ -1978,7 +1978,7 @@ function renderPitDetail(pitId){
     const txt = x.q.q.length > 56 ? x.q.q.slice(0, 56) + '…' : x.q.q;
     return `<div class="rank-row ${ok ? 'pit-ok' : ''}" data-pit-q="${x.sid}:${x.i}" tabindex="0" role="button">
       <span class="rank-badge" style="${ok
-        ? 'background:#12241b;color:#6fc79a;border:1px solid #2e6b4d'
+        ? 'background:var(--ok-bg);color:var(--ok-text);border:1px solid var(--ok-line)'
         : 'background:#16202c;color:#8fa8c4;border:1px solid #253345'};white-space:nowrap">${ok ? '✓' : '练'}</span>
       <span class="qres">${txt}</span>
       <span class="dom" style="color:#6a819c">${s.n}</span>
