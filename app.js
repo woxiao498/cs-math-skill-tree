@@ -939,7 +939,15 @@ function renderPanel(){
   // 点亮了才给"下一步"，没点亮的话下一步就是把这一课做完
   const nextStep = lit ? pickNextStep(id) : null;
 
-  const pts = (s.pts || []).map(p => `<li>${p}</li>`).join('');
+  // 每个知识点挂了讲义（lessons/lessons.all.js）就在标题下面铺开四段。
+  // 讲义按 t 跟 pts 原文对，对不上就退回只显示标题，不硬凑。
+  const lessonList = (typeof LESSONS_BY_SKILL !== 'undefined' && LESSONS_BY_SKILL[id]) || null;
+  const pts = (s.pts || []).map(p => {
+    const hit = lessonList && lessonList.find(x => x.t === p);
+    if (!hit || !hit.body) return `<li>${p}</li>`;
+    const segs = hit.body.split(/(?=二、|三、|四、)/).map(t => `<p>${t}</p>`).join('');
+    return `<li><b class="pt-t">${p}</b><div class="pt-body">${segs}</div></li>`;
+  }).join('');
   const qTags = (s.q || []).map(x => `<span class="tag q">${x}题</span>`).join(' ') || '<span class="tag">不考</span>';
 
   const preChips = (s.pre || []).length

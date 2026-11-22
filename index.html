@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -268,6 +268,11 @@
   .pts{margin:0;padding-left:0;list-style:none}
   .pts li{position:relative;padding-left:15px;margin-bottom:5px;font-size:13px;color:#c3cfe0}
   .pts li::before{content:"";position:absolute;left:2px;top:9px;width:4px;height:4px;border-radius:50%;background:var(--nc,#4a5c73)}
+  /* 知识点讲义：标题一行，下面四段铺开。面板窄，正文比标题淡一档 */
+  .pt-t{display:block;font-weight:650;color:#dbe4f0;margin-bottom:6px}
+  .pt-body{margin:0 0 13px;font-size:13px;line-height:1.75;color:#93a3b8}
+  .pt-body p{margin:0 0 7px}
+  .pt-body p:last-child{margin-bottom:0}
   .p-how{background:#101924;border:1px solid #22344a;border-left:2px solid var(--accent);
     border-radius:8px;padding:9px 11px;font-size:13px;color:#c9d8ea}
   .tip{background:#151e2a;border:1px solid #2c3a4d;border-left:2px solid #5b8fd6;
@@ -788,6 +793,7 @@
 <script src="videos.js"></script>
 <script src="quiz.js"></script>
 <script src="pits.js"></script>
+<script src="lessons/lessons.all.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
