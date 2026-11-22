@@ -1,4 +1,4 @@
-/* =======================================================================
+﻿/* =======================================================================
  *  基础索引与图算法
  * ======================================================================= */
 const byId = Object.fromEntries(SKILLS.map(s => [s.id, s]));
@@ -213,32 +213,49 @@ function pitQuestionKey(sid, qi){
   return rev ? sid + ':' + qi + ':v' + rev : sid + ':' + qi;
 }
 function load(){
+  // 每个字段单独容错。原来整个 load 包在一个 try 里，
+  // 只要有一个字段形状不对（比如 wrong 变成对象），后面 progress / stats 全读不到，
+  // 接着任何一次 save 都会把空 state 写回去 —— 一次读失败就变成真的丢档。
+  let d;
   try{
     const raw = localStorage.getItem(KEY) || localStorage.getItem(OLD_KEY);
     if (!raw) return;
-    const d = JSON.parse(raw);
-    (d.lit || []).forEach(x => byId[x] && state.lit.add(x));
-    state.goal = d.goal && byId[d.goal] ? d.goal : null;
-    state.showSkippable = !!d.showSkippable;
-    state.wrong = (d.wrong || []).filter(sameQuestion);
-    state.progress = d.progress || {};
-    state.stats = d.stats || {};
-    state.unlitSet = new Set((d.unlit || []).filter(x => byId[x]));
-    if (d.domainView === 'list') state.domainView = 'list';
-    if (d.pitDone && typeof d.pitDone === 'object') state.pitDone = d.pitDone;
-    if (d.streak) state.streak = d.streak;
-    // 恢复模拟考：按时间戳扣掉关页面期间流逝的时间，别让人关一夜还剩 120 分钟
-    if (d.mock && d.mock.paper && d.mock.paper.choice && d.mock.paper.choice.length){
-      const m = d.mock;
-      const gap = m.savedAt ? Math.round((Date.now() - m.savedAt) / 1000) : 0;
-      state.mock = {
-        paper: m.paper, ans: m.ans || [], fillSelf: m.fillSelf || [], solveSelf: m.solveSelf || [],
-        left: Math.max(0, (m.left || 0) - gap), done: !!m.done
-      };
-      if (!state.mock.done && state.mock.left > 0){ state.view = 'mock'; tickMock(); }
-      else if (!state.mock.done && state.mock.left <= 0) state.mock.done = true;
-    }
-  }catch(e){}
+    d = JSON.parse(raw);
+  }catch(e){ return; }
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return;
+
+  const arr = v => Array.isArray(v) ? v : null;
+  const obj = v => (v && typeof v === 'object' && !Array.isArray(v)) ? v : null;
+
+  const lit = arr(d.lit);
+  if (lit) lit.forEach(x => byId[x] && state.lit.add(x));
+  state.goal = d.goal && byId[d.goal] ? d.goal : null;
+  state.showSkippable = !!d.showSkippable;
+  const wrong = arr(d.wrong);
+  if (wrong) state.wrong = wrong.filter(w => w && typeof w === 'object' && sameQuestion(w));
+  const progress = obj(d.progress);
+  if (progress) state.progress = progress;
+  const stats = obj(d.stats);
+  if (stats) state.stats = stats;
+  const unlit = arr(d.unlit);
+  if (unlit) state.unlitSet = new Set(unlit.filter(x => byId[x]));
+  if (d.domainView === 'list') state.domainView = 'list';
+  const pitDone = obj(d.pitDone);
+  if (pitDone) state.pitDone = pitDone;
+  const streak = obj(d.streak);
+  if (streak) state.streak = streak;
+
+  // 恢复模拟考：按时间戳扣掉关页面期间流逝的时间，别让人关一夜还剩 120 分钟
+  const m = obj(d.mock);
+  if (m && m.paper && m.paper.choice && m.paper.choice.length){
+    const gap = m.savedAt ? Math.round((Date.now() - m.savedAt) / 1000) : 0;
+    state.mock = {
+      paper: m.paper, ans: m.ans || [], fillSelf: m.fillSelf || [], solveSelf: m.solveSelf || [],
+      left: Math.max(0, (m.left || 0) - gap), done: !!m.done
+    };
+    if (!state.mock.done && state.mock.left > 0){ state.view = 'mock'; tickMock(); }
+    else if (!state.mock.done && state.mock.left <= 0) state.mock.done = true;
+  }
 }
 
 function visibleSkills(){
@@ -1237,6 +1254,7 @@ function startMock(mode){
   state.selected = null;
   state.query = '';
   if (!basic) tickMock();
+  save();   // 开始考试就得落盘，不然刷新一下整场考试就没了
   render();
 }
 
@@ -1787,7 +1805,7 @@ function renderPaper(){
 
   main.innerHTML = `
     <div class="crumbs noprint"><a data-go="home">领域总览</a> / <span>${isWrong ? '错题卷' : '打印练习卷'}</span></div>
-    <div class="p-actions noprint" style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px">
+    <div class="p-actions p-actions-bar noprint" style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px">
       <button class="btn primary" data-paper-print>打印 / 存成 PDF</button>
       <button class="btn" data-paper-toggle>${showKey ? '只看卷子' : '显示答案'}</button>
       <button class="btn" data-paper-new>${isWrong ? '重新取一遍错题' : '换一张卷子'}</button>
@@ -2216,6 +2234,7 @@ document.getElementById('main').addEventListener('click', e => {
   if (mo && state.mock){
     const [i, oi] = mo.dataset.mockOpt.split(':').map(Number);
     state.mock.ans[i] = oi;
+    save();
     render();
     return;
   }
@@ -2223,6 +2242,7 @@ document.getElementById('main').addEventListener('click', e => {
   if (mf && state.mock){
     const [i, v] = mf.dataset.mockFill.split(':').map(Number);
     state.mock.fillSelf[i] = v === 1;
+    save();
     render();
     return;
   }
@@ -2230,6 +2250,7 @@ document.getElementById('main').addEventListener('click', e => {
   if (ms && state.mock){
     const [i, v] = ms.dataset.mockSolve.split(':').map(Number);
     state.mock.solveSelf[i] = v === 1;
+    save();
     render();
     return;
   }
@@ -2415,6 +2436,7 @@ document.getElementById('main').addEventListener('input', e => {
   const [kind, i] = t.dataset.mockText.split(':');
   if (kind === 'fill') state.mock.fillText[+i] = t.value;
   else if (kind === 'solve') state.mock.solveText[+i] = t.value;
+  save();
 });
 
 document.getElementById('panel').addEventListener('click', e => {
@@ -2697,6 +2719,38 @@ document.getElementById('tgl-skip').checked = state.showSkippable;
   });
 })();
 
+
+/* 双标签：另一个标签刚写了存档，把数据字段同步过来。
+   不重新渲染（免得打断当前操作），但内存里的值必须更新 ——
+   否则本标签下一次 save 会用它打开时的旧快照，把对方刚写进去的目标、
+   错题复习进度整个盖掉。学生不用碰开发者工具，开两个标签就会撞上。 */
+window.addEventListener('storage', e => {
+  if (e.key !== KEY || !e.newValue) return;
+  let d;
+  try { d = JSON.parse(e.newValue); } catch (err) { return; }
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return;
+
+  const arr = v => Array.isArray(v) ? v : null;
+  const obj = v => (v && typeof v === 'object' && !Array.isArray(v)) ? v : null;
+
+  const lit = arr(d.lit);
+  if (lit) state.lit = new Set(lit.filter(x => byId[x]));
+  if ('goal' in d) state.goal = d.goal && byId[d.goal] ? d.goal : null;
+  if ('showSkippable' in d) state.showSkippable = !!d.showSkippable;
+  const wrong = arr(d.wrong);
+  if (wrong) state.wrong = wrong.filter(w => w && typeof w === 'object' && sameQuestion(w));
+  const progress = obj(d.progress);
+  if (progress) state.progress = progress;
+  const stats = obj(d.stats);
+  if (stats) state.stats = stats;
+  const unlit = arr(d.unlit);
+  if (unlit) state.unlitSet = new Set(unlit.filter(x => byId[x]));
+  if (d.domainView === 'list') state.domainView = 'list';
+  const pitDone = obj(d.pitDone);
+  if (pitDone) state.pitDone = pitDone;
+  const streak = obj(d.streak);
+  if (streak) state.streak = streak;
+});
 
 /* 窗口变窄/变宽时，领域图要在「横向地图」和「纵向列表」之间切换 */
 let _rzTimer;

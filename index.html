@@ -283,6 +283,9 @@
   .chip.soft{border-style:dashed}
   .p-actions{display:flex;gap:8px;margin:20px 0 6px;flex-wrap:wrap}
   .p-actions .btn{flex:1;text-align:center;padding:9px 12px}
+  /* 练习卷顶部那五个按钮不能平分宽度：flex:1 会把它们压成一条条竖字，
+     窄屏下要靠 wrap 换行。这里按内容宽度，放不下就掉到下一行。 */
+  .p-actions-bar .btn{flex:0 0 auto;white-space:nowrap}
   .btn.lit{background:var(--ok-bg);border-color:var(--ok-line);color:var(--ok-text)}
   .btn.primary{background:#1c3350;border-color:#2f5480;color:#a9cbef}
   .btn:disabled{opacity:.4;cursor:not-allowed}
