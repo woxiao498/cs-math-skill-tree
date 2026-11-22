@@ -433,7 +433,7 @@ function renderHome(){
         </div>
         <div class="desc">${d.desc}</div>
         <div class="foot">
-          <span>${litN}/${total} 已点亮${hidden ? ` · 其中 ${hidden} 个可先跳` : ''}</span>
+          <span>${litN}/${total} 已点亮${hidden ? ` · 可跳 ${hidden}` : ''}</span>
           <span class="mini-bar"><i style="width:${pct}%"></i></span>
           <span title="${ext.size ? `要先学 ${ext.size} 个其他领域的技能` : '没有任何前置，可以从这里开始'}">${ext.size ? `先学 ${ext.size} 个` : '可以从这开始'}</span>
         </div>
@@ -570,7 +570,7 @@ function renderDomain(domId){
   vis.forEach(s => { const st = stepOf(s.id); (byStep[st] = byStep[st] || []).push(s); });
   const steps = Object.keys(byStep).map(Number).sort((a, b) => a - b);
 
-  const COLW = 198, ROWH = 96, PADX = 24, PADY = 48, W = 174, H = 68;
+  const COLW = 198, ROWH = 96, PADX = 24, PADY = 48, W = 174, H = 76;
   const pos = {};
   const maxRows = Math.max(...steps.map(st => byStep[st].length));
 
@@ -618,7 +618,7 @@ function renderDomain(domId){
     const extPre = allPre(s.id).filter(p => !pos[p]);
     let cls = 'node';
     if (s.lv === 'D') cls += ' skippable';
-    if (lit) cls += ' lit'; else if (!unlocked) cls += ' locked';
+    if (lit) cls += ' lit'; else if (!unlocked) cls += ' locked'; else cls += ' open';
     if (s.id === sel) cls += ' sel';
     else if (sel && (ancSet.has(s.id) || kids.has(s.id))) cls += ' hl';
     else if (sel) cls += ' dimmed';
@@ -677,11 +677,20 @@ function renderDomain(domId){
       return `<div class="hint-line">这里从第 ${minSt} 步开始，不是第一课 —— 要先会
         ${missing.map(p => `<b data-goto-skill="${p}">${byId[p].n}</b>`).join('、')}。点它就能去做。</div>`;
     })()}
-    <div class="map-wrap" style="height:${height + 40}px">
-      <div class="map-inner" style="width:${width}px;height:${height}px">
-        <svg class="edges" width="${width}" height="${height}">${edges}</svg>
-        ${heads}
-        ${nodes}
+    <div class="map-shell">
+      <div class="map-range" hidden><span></span></div>
+      <div class="map-stage">
+        <div class="map-wrap" style="height:${height + 40}px">
+          <div class="map-inner" style="width:${width}px;height:${height}px">
+            <svg class="edges" width="${width}" height="${height}">${edges}</svg>
+            ${heads}
+            ${nodes}
+          </div>
+        </div>
+        <div class="map-fade map-fade-l" aria-hidden="true"></div>
+        <div class="map-fade map-fade-r" aria-hidden="true"></div>
+        <button class="map-nav map-nav-l" type="button" aria-label="往前看几步" hidden>‹</button>
+        <button class="map-nav map-nav-r" type="button" aria-label="往后看几步" hidden>›</button>
       </div>
     </div>`;
 }
@@ -920,11 +929,11 @@ function renderPanel(){
         return `<span class="chip ${ok ? 'ok' : 'miss'} ${soft ? 'soft' : ''}" data-skill="${p}" tabindex="0" role="button"
           title="${soft ? '学会了更好，不学也能做' : '要先学会这一课'}">${ok ? '✓' : '·'} ${byId[p].n}${soft ? ' (推荐)' : ''}</span>`;
       }).join('')
-    : '<span style="font-size:12px;color:var(--txt3)">不用先学别的，从这里开始</span>';
+    : '<span style="font-size:13px;color:var(--txt3)">不用先学别的，从这里开始</span>';
 
   const kidChips = kids.length
     ? kids.map(k => `<span class="chip" data-skill="${k}">${byId[k].n}</span>`).join('')
-    : '<span style="font-size:12px;color:var(--txt3)">没有必修它的下游</span>';
+    : '<span style="font-size:13px;color:var(--txt3)">没有必修它的下游</span>';
 
   panel.innerHTML = `
     <div class="panel-grip"></div>
@@ -934,9 +943,9 @@ function renderPanel(){
     <div class="p-row">
       ${s.d === 'prep'
         ? `<span class="rank-badge" style="background:#1d2733;color:#8fa8c4;border:1px solid #2c3b4d;white-space:nowrap">地基</span>
-           <span style="font-size:12px;color:#8fa8c4">不出独立考题，但必须会</span>`
+           <span style="font-size:13px;color:#8fa8c4">不出独立考题，但必须会</span>`
         : `<span class="rank-badge lv-${s.lv}">${s.lv}</span>
-           <span style="font-size:12px;color:#93a3b8">${({A:'主力，必考',B:'常考',C:'边缘',D:'可跳过'})[s.lv]}</span>`}
+           <span style="font-size:13px;color:#93a3b8">${({A:'主力，必考',B:'常考',C:'边缘',D:'可跳过'})[s.lv]}</span>`}
       ${qTags}
     </div>
 
@@ -945,14 +954,14 @@ function renderPanel(){
       <ul class="pts" style="--nc:${d.color}">${pts || '<li>（无）</li>'}</ul>
     </details>
 
-    <div class="p-sec">掌握到什么程度</div>
+    <div class="p-sec p-sec-exam">掌握到什么程度</div>
     <div class="p-how">${s.how}</div>
 
-    ${s.tip ? `<div class="p-sec">坑在哪</div><div class="tip">${s.tip}</div>` : ''}
+    ${s.tip ? `<div class="p-sec p-sec-pit">坑在哪</div><div class="tip">${s.tip}</div>` : ''}
 
     ${(s.unsure || domUnsure) ? `<div class="unsure">⚠ ${s.unsure || domUnsure}</div>` : ''}
 
-    <div class="p-sec">怎么学 · 视频</div>
+    <div class="p-sec p-sec-learn">怎么学 · 视频</div>
     ${vids.length ? vids.map(v => `
       <div class="vcard">
         <div class="vtitle">${escHtml(v.t)}</div>
@@ -963,7 +972,7 @@ function renderPanel(){
           <button class="btn mini" data-play="${v.bv}" data-page="${v.page || ''}">在本页看</button>
           <a class="btn mini" href="https://www.bilibili.com/video/${v.bv}${v.page ? '?p=' + v.page : ''}" target="_blank" rel="noopener noreferrer">去 B站</a>
         </div>
-      </div>`).join('') : '<div style="font-size:12px;color:var(--txt3)">这一课还没找到合适的视频</div>'}
+      </div>`).join('') : '<div style="font-size:13px;color:var(--txt3)">这一课还没找到合适的视频</div>'}
     <div id="player-slot"></div>
 
     <div class="p-sec">要先学会</div>
@@ -986,7 +995,7 @@ function renderPanel(){
     </div>
     ${q ? `<div class="p-hint">${lit ? '已通过结业挑战' : `${quizRule(QUIZ[id].length)}才能点亮${best ? ` · 你目前最好成绩 ${Math.round(best * 100)}%` : ''}`}</div>` : ''}
     ${state.goal === id
-      ? `<div style="font-size:12px;color:#a9cbef;margin-top:6px">当前目标就是它 ·
+      ? `<div style="font-size:13px;color:#a9cbef;margin-top:6px">当前目标就是它 ·
            <a data-goal-clear style="color:#7fb0e8;cursor:pointer;text-decoration:underline">取消目标</a></div>`
       : ''}
   `;
@@ -1773,7 +1782,7 @@ function renderPaper(){
       <div class="kgroup"><b>一、选择题</b><div>${p.choice.map((x, i) => `${i + 1}. ${'ABCD'[x.q.a]}`).join('　')}</div></div>
       ${p.fill.length ? `<div class="kgroup"><b>二、填空题</b><div>${p.fill.map((q, i) => `${off + 1 + i}. ${q.a}`).join('　｜　')}</div></div>` : ''}
       ${p.solve.length ? `<div class="kgroup"><b>三、解答题</b>${p.solve.map((q, i) => `<div class="kitem"><b>${off + p.fill.length + 1 + i}.</b>（${q.pts || 12} 分）${q.a}<div class="kwhy">${q.why}</div>${q.steps ? `<div class="ksteps">给分点：${q.steps}</div>` : ''}${q.std ? `<details class="kstd"><summary>标准写法 —— 照着这个写才拿得到分</summary><div>${q.std}</div></details>` : ''}</div>`).join('')}</div>` : ''}
-      <div class="kgroup"><b>每题对应技能</b><div style="font-size:12px;color:#666">${p.choice.map((x, i) => `${i + 1}.${byId[x.sid].n}`).join('　')}</div></div>
+      <div class="kgroup"><b>每题对应技能</b><div style="font-size:13px;color:#666">${p.choice.map((x, i) => `${i + 1}.${byId[x.sid].n}`).join('　')}</div></div>
     </div>`;
 
   main.innerHTML = `
@@ -1785,7 +1794,7 @@ function renderPaper(){
       <button class="btn" data-mock-start="basic">先做地基 10 题（不计时）</button>
       <button class="btn" data-mock-start="full">整卷模拟考（${EXAM.minutes} 分钟）</button>
     </div>
-    <div class="noprint" style="font-size:12px;color:#7d92aa;line-height:1.75;margin-bottom:18px">
+    <div class="noprint" style="font-size:13px;color:#7d92aa;line-height:1.75;margin-bottom:18px">
       ${isWrong
         ? `这份卷子是从你的错题本里取的，共 ${p.choice.length} 道选择题，按「该复习的先后」排好了。<br>做的时候先别看答案，做完点「显示答案」再对。`
         : `15 选择 + 5 填空 + 4 解答，共 150 分、120 分钟，结构和真卷一致。<br>
@@ -1923,7 +1932,7 @@ function renderStats(){
 
     <div style="margin-top:32px;padding-top:16px;border-top:1px solid #1b2431">
       <button class="btn" data-reset style="border-color:#4d5b6f;color:var(--txt)">清空这台设备上的所有进度</button>
-      <span style="font-size:12px;color:var(--txt3);margin-left:10px">清空后没有撤销键，建议先点顶栏「导出」备份</span>
+      <span style="font-size:13px;color:var(--txt3);margin-left:10px">清空后没有撤销键，建议先点顶栏「导出」备份</span>
     </div>
   `;
 }
@@ -2032,6 +2041,75 @@ function renderMain(){
   if (state.view === 'about') return renderAbout();
   return renderHome();
 }
+/* 横向地图比容器宽时：给渐隐 + 翻页 + 步数范围。
+   右栏是 static 占一整列，不是浮层，所以地图宽度不够只能横向滚动 ——
+   不给提示的话，右边的节点就是无声消失的。 */
+let _mapScroll = 0;
+function updateMapOverflow(restore){
+  const wrap = document.querySelector('.map-wrap');
+  if (!wrap) return;
+  const shell = wrap.closest('.map-shell');
+  if (!shell) return;
+  const range = shell.querySelector('.map-range');
+  const label = range && range.querySelector('span');
+  const btnL = shell.querySelector('.map-nav-l');
+  const btnR = shell.querySelector('.map-nav-r');
+
+  // 选节点会重渲染整块地图，别把人弹回最左边
+  if (restore && _mapScroll > 0) wrap.scrollLeft = _mapScroll;
+
+  const over = wrap.scrollWidth - wrap.clientWidth;
+  const has = over > 2;
+  shell.classList.toggle('is-overflow', has);
+  shell.classList.toggle('at-start', wrap.scrollLeft <= 2);
+  shell.classList.toggle('at-end', !has || wrap.scrollLeft >= over - 2);
+  if (range) range.hidden = !has;
+  if (btnL) btnL.hidden = !has || wrap.scrollLeft <= 2;
+  if (btnR) btnR.hidden = !has || wrap.scrollLeft >= over - 2;
+
+  if (has && label) {
+    const heads = [...wrap.querySelectorAll('.step-head')];
+    const xs = heads.map(h => parseFloat(h.style.left) || 0);
+    const left = wrap.scrollLeft;
+    const right = left + wrap.clientWidth;
+    // 只报「整列完整露出来」的区间。露半个身子也算进去的话，
+    // 会出现「第三步 – 第七步」但第七步被切掉一截这种自相矛盾。
+    const nodeW = (wrap.querySelector('.node') || {}).offsetWidth || 174;
+    let first = -1, last = -1;
+    xs.forEach((x, i) => {
+      if (x >= left - 2 && x + nodeW <= right + 2) {
+        if (first < 0) first = i;
+        last = i;
+      }
+    });
+    const short = i => (heads[i].textContent.match(/第[\d一二三四五六七八九十]+步/) || [heads[i].textContent])[0];
+    const total = heads.length;
+    if (total) {
+      if (first >= 0) {
+        label.textContent = first === last
+          ? `${short(first)}（共 ${total} 步）`
+          : `${short(first)} – ${short(last)}（共 ${total} 步）`;
+      } else {
+        label.textContent = `共 ${total} 步，左右滑动看全`;
+      }
+    }
+  }
+
+  _mapScroll = wrap.scrollLeft;
+
+  if (!wrap.dataset.navBound) {
+    wrap.dataset.navBound = '1';
+    wrap.addEventListener('scroll', () => updateMapOverflow(false), { passive: true });
+    shell.addEventListener('click', e => {
+      const btn = e.target.closest('.map-nav');
+      if (!btn) return;
+      const xs = [...wrap.querySelectorAll('.step-head')].map(h => parseFloat(h.style.left) || 0);
+      const step = xs.length > 1 ? Math.abs(xs[1] - xs[0]) : wrap.clientWidth * .8;
+      wrap.scrollBy({ left: (btn.classList.contains('map-nav-l') ? -1 : 1) * step, behavior: 'smooth' });
+    });
+  }
+}
+
 function render(){
   if (sweepLitByScore()) save();
   syncNav();
@@ -2045,6 +2123,7 @@ function render(){
   renderMain();
   renderPanel();
   renderProgress();
+  updateMapOverflow(true);
   syncHash();
   renderWrongBadge();
 }
