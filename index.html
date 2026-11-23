@@ -223,6 +223,20 @@
   .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--txt3);margin:0 0 14px}
   .legend i{display:inline-block;width:22px;height:0;border-top:2px solid #33415a;vertical-align:middle;margin-right:5px}
   .legend i.dash{border-top-style:dashed}
+  /* 图例收进折叠。节点本身已经有黄底 / 薄荷描边 / 虚线三种可读状态，
+     三行灰字压在地图上，是全页最读不下去的一块。 */
+  .legend-fold{margin:0 0 14px}
+  .legend-fold summary{cursor:pointer;display:inline-flex;align-items:center;gap:7px;
+    padding:5px 11px;border:1px solid var(--line);border-radius:8px;width:fit-content;
+    font-size:13px;color:var(--txt2);list-style:none;user-select:none}
+  .legend-fold summary::-webkit-details-marker{display:none}
+  .legend-fold summary::before{content:"?";display:inline-grid;place-items:center;
+    width:17px;height:17px;border-radius:50%;background:#1b2431;color:var(--txt3);
+    font-size:11px;font-weight:700}
+  .legend-fold summary:hover{border-color:#33445c;color:var(--txt)}
+  .legend-fold[open] summary{margin-bottom:12px}
+  .legend-fold .legend{margin:0 0 9px}
+  .legend-fold .legend:last-child{margin-bottom:0}
   .swipe-hint{margin:0 0 10px;font-size:13px;color:#7d92aa}
   .map-wrap{-webkit-overflow-scrolling:touch}
   /* 图例做成「节点的缩小版」，不是一个勾选框 */

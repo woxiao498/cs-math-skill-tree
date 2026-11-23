@@ -670,20 +670,25 @@ function renderDomain(domId){
       ${domainViewToggle()}
     </div>
     ${window.innerWidth <= 1080 ? '<div class="swipe-hint">这张图比屏幕宽，左右滑动看全，点节点看详情。</div>' : ''}
-    <div class="legend legend-state">
-      <span><i class="lg-lit"></i>已点亮</span>
-      <span><i class="lg-open"></i>能学，还没点亮</span>
-      <span><i class="lg-lock"></i>要先学会前面的</span>
-      <span><i class="lg-skip"></i>可跳过</span>
-    </div>
-    <div class="legend" style="margin-top:-6px">
-      <span><i></i>实线=必须先学</span>
-      <span><i class="dash"></i>虚线=推荐先学（不学也能做）</span>
-      <span><span class="kbd">点节点</span> 亮出整条前置链</span>
-    </div>
-    <div class="legend" style="margin-top:-8px">
-      <span>步数按整棵树算 —— 某个技能的第一课可能落在别的领域，所以这里的起点不一定是第一步。</span>
-    </div>
+    <details class="legend-fold">
+      <summary>图例</summary>
+      <div class="legend-body">
+        <div class="legend legend-state">
+          <span><i class="lg-lit"></i>已点亮</span>
+          <span><i class="lg-open"></i>能学，还没点亮</span>
+          <span><i class="lg-lock"></i>要先学会前面的</span>
+          <span><i class="lg-skip"></i>可跳过</span>
+        </div>
+        <div class="legend">
+          <span><i></i>实线=必须先学</span>
+          <span><i class="dash"></i>虚线=推荐先学（不学也能做）</span>
+          <span><span class="kbd">点节点</span> 亮出整条前置链</span>
+        </div>
+        <div class="legend">
+          <span>步数按整棵树算 —— 某个技能的第一课可能落在别的领域，所以这里的起点不一定是第一步。</span>
+        </div>
+      </div>
+    </details>
     ${domId === 'prep' ? `<div class="unsure" style="margin:0 0 14px">这一层不出独立考题，所以重要度对这里没有意义 —— 九条全都得会，缺哪条后面都会塌。</div>` : ''}
     ${(() => {
       // 这个领域的技能不都从第一步开始，得说清为什么，并给出跳转
