@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -88,6 +88,25 @@
   aside#panel{
     width:392px;flex:0 0 392px;border-left:1px solid var(--line);
     background:rgba(16,21,29,.6);overflow:auto;padding:20px;
+  }
+  /* 桌面端面板改成右侧浮层：fixed 脱流后 main 占满宽度，地图的横向溢出自然没了。
+     关着时（body.no-panel）直接 display:none，一个像素都不占。
+     背景必须不透明 —— 半透明的话底下的树会透上来，比被盖住更难读。 */
+  @media (min-width:1081px){
+    aside#panel{
+      position:fixed;top:122px;right:0;bottom:0;width:440px;z-index:12;
+      flex:none;border-left:1px solid var(--line);
+      background:#101821;
+      box-shadow:-18px 0 40px -28px #000;
+      padding:20px 22px;
+    }
+    /* 面板打开时，给地图右边让出 460px。
+       不是把容器变窄，是加 padding —— 这样内容还是完整的，
+       只是可见区缩到面板左边，溢出的部分能滚，JS 再把选中节点滚进来。
+       翻页钮和右边缘渐隐跟着往里挪，否则它们会落在面板底下没人看得到。 */
+    body:not(.no-panel) .map-wrap{padding-right:460px}
+    body:not(.no-panel) .map-nav-r{right:468px}
+    body:not(.no-panel) .map-fade-r{right:461px}
   }
 
   .sec-title{display:flex;align-items:baseline;gap:10px;margin:0 0 14px;flex-wrap:wrap}

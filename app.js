@@ -2084,8 +2084,20 @@ function updateMapOverflow(restore){
   const btnL = shell.querySelector('.map-nav-l');
   const btnR = shell.querySelector('.map-nav-r');
 
-  // 选节点会重渲染整块地图，别把人弹回最左边
-  if (restore && _mapScroll > 0) wrap.scrollLeft = _mapScroll;
+  // 选节点会重渲染整块地图，别把人弹回最左边。
+  // 但面板是浮层：选中了就把它滚到面板左边的可视区中间，别让人干看着一格都露不全。
+  if (restore){
+    const sel = wrap.querySelector('.node.sel');
+    if (sel){
+      const panelW = window.innerWidth > 1080 ? 440 : 0;
+      const x = parseFloat(sel.style.left) || 0;
+      const w = sel.offsetWidth || 174;
+      const target = x + w / 2 - (wrap.clientWidth - panelW) / 2;
+      wrap.scrollLeft = Math.max(0, Math.min(target, wrap.scrollWidth - wrap.clientWidth));
+    } else if (_mapScroll > 0){
+      wrap.scrollLeft = _mapScroll;
+    }
+  }
 
   const over = wrap.scrollWidth - wrap.clientWidth;
   const has = over > 2;
