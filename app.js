@@ -24,6 +24,36 @@ DOMAINS.forEach(d => {
 const STEP_TEXT = ['', '第一步 · 零门槛', '第二步', '第三步', '第四步', '第五步', '第六步', '第七步', '第八步'];
 
 /* -----------------------------------------------------------------------
+ * 免费范围与激活（实现在 gate.js）
+ * 兜底返回 true：万一 gate.js 没加载，站还能用。
+ * 删掉 gate.js 就等于全站免费 —— 源码本来就公开，这一点认了。
+ * --------------------------------------------------------------------- */
+function gateOn(){ return !!(window.Gate && Gate.activated && Gate.activated()); }
+function canUseDom(domId){ return (window.Gate && Gate.canUse) ? Gate.canUse(domId) : true; }
+function canUseSkill(sid){ return (window.Gate && Gate.canSkill) ? Gate.canSkill(sid) : true; }
+function lockCard(opts){
+  return (window.Gate && Gate.lockCard)
+    ? Gate.lockCard(opts)
+    : '<div class="gate-card"><div class="gate-h">这一块要激活码</div></div>';
+}
+/* 免费领域的中文名，给首页和「关于」用，别在文案里写死 */
+function freeDomainNames(){
+  const ids = (window.Gate && Gate.FREE_DOMAINS) || [];
+  return ids.filter(id => domById[id]).map(id => domById[id].name).join('、');
+}
+function freeSkillCount(){
+  const ids = (window.Gate && Gate.FREE_DOMAINS) || [];
+  return SKILLS.filter(s => ids.includes(s.d)).length;
+}
+/* 免费范围里建议从哪一课开始：优先前置都齐的 */
+function pickFreeStart(){
+  const ids = (window.Gate && Gate.FREE_DOMAINS) || [];
+  const ready = SKILLS.filter(s => ids.includes(s.d) && hasQuiz(s.id) && !state.lit.has(s.id));
+  const open = ready.filter(s => isUnlocked(s.id));
+  return (open[0] || ready[0] || {}).id || null;
+}
+
+/* -----------------------------------------------------------------------
  * 选项打乱
  * 出题时为了写起来顺手，正确答案都写在第一个，结果 123 道全是选 A ——
  * 学生一路选 A 就满分，练习等于废了。这里按题目内容做确定性打乱：
@@ -283,11 +313,11 @@ const quizCount = () => Object.keys(QUIZ).reduce((a, k) => a + QUIZ[k].length, 0
 /* 及格题数。
  * ceil(n×0.8) 在 1~3 题时都等于 n，也就是必须全对 —— 3 题全对通过率只有 0.51，
  * 比 5 题答对 4 题（0.63）还难。边缘考点（C 级 3 题）比核心考点（A 级 5 题）更严，
- * 这个错位说不过去，所以 3 题放一道：答对 2 就算过。1~2 题仍然全对。 */
+ * 这个错位说不过去，所以 3 题放一道：答对 2 就算过。1~2 题仍然全对。
+ * 4 题同理：ceil(4×0.8)=4 又变成全对，跟 3 题一个毛病，所以 3 题以上统一「可以错一道」。 */
 function needRight(n){
   if (n <= 2) return n;          // 1 题、2 题：全对
-  if (n === 3) return 2;         // 3 题：可以错一道
-  return Math.ceil(n * QUIT_PASS); // 5 题 → 4
+  return n - 1;                  // 3 题→2、4 题→3、5 题→4、6 题→5
 }
 function quizRule(n){
   const need = needRight(n);
@@ -401,6 +431,7 @@ function renderProgress(){
 function pickTodaySkill(){
   const ready = SKILLS.filter(s =>
     !state.lit.has(s.id) && hasQuiz(s.id) && isUnlocked(s.id) &&
+    canUseSkill(s.id) &&                  // 首页别推一节点了没反应的课
     (state.showSkippable || s.lv !== 'D')
   );
   if (!ready.length) return null;
@@ -481,8 +512,19 @@ function renderHome(){
         const tid = pickTodaySkill();
         if (!tid){
           const litN = SKILLS.filter(s => state.lit.has(s.id)).length;
-          return `<div class="flabel">${litN ? '全都点亮了' : '没有能直接开始的课'}</div>
-            <div class="fmeta">${litN ? '可以去「重要度排行」回头看哪块还不熟。' : '要先学的还没点亮，去下面从头挑一个。'}</div>`;
+          if (litN) return `<div class="flabel">全都点亮了</div>
+            <div class="fmeta">可以去「重要度排行」回头看哪块还不熟。</div>`;
+          if (!gateOn()){
+            const fs = pickFreeStart();
+            return `<div class="flabel">免费开放的是${freeDomainNames()}</div>
+              <div class="fmeta">这几个领域的讲义、题、视频全开${fs ? `，先从「${byId[fs].n}」开始` : ''}。
+                其余领域激活后能学，地图现在就能看。</div>
+              <div class="fbtns">${fs ? `<button class="btn fprimary" data-start="${fs}">开始第一课</button>
+                <button class="btn mini" data-goto-skill="${fs}">这一课教什么</button>` : ''}
+                <button class="btn mini" data-go="about">免费范围</button></div>`;
+          }
+          return `<div class="flabel">没有能直接开始的课</div>
+            <div class="fmeta">要先学的还没点亮，去下面从头挑一个。</div>`;
         }
         const ts = byId[tid];
         const mins = Math.max(2, Math.round(QUIZ[tid].length * 1.2));
@@ -702,6 +744,7 @@ function renderDomain(domId){
       return `<div class="hint-line">这里从第 ${minSt} 步开始，不是第一课 —— 要先会
         ${missing.map(p => `<b data-goto-skill="${p}">${byId[p].n}</b>`).join('、')}。点它就能去做。</div>`;
     })()}
+    ${canUseDom(domId) ? '' : `<div class="gate-hint">这个领域的讲义、视频和题要激活码。<b>地图可以先看</b> —— 每个技能考什么、要会哪几条、坑在哪，点开都有。</div>`}
     <div class="map-shell">
       <div class="map-range" hidden><span></span></div>
       <div class="map-stage">
@@ -794,12 +837,15 @@ function unescHtml(s){
 
 function searchQuestions(q){
   const out = [];
+  const full = gateOn();      // 没激活就搜不到付费领域的题干和解析
   Object.entries(QUIZ).forEach(([sid, arr]) => {
+    if (!canUseSkill(sid)) return;
     arr.forEach((qq, i) => {
       const hay = [qq.q, qq.why, ...(qq.o || [])].join(' ').toLowerCase();
       if (hay.includes(q)) out.push({ sid, i, q: qq });
     });
   });
+  if (!full) return out;
   PAPER_FILL.forEach((qq, i) => {
     if ([qq.q, qq.a, qq.why].join(' ').toLowerCase().includes(q)) out.push({ paper: 'fill', i, q: qq });
   });
@@ -812,6 +858,7 @@ function searchQuestions(q){
 
 function startSolo(sid, i, pitContext){
   if (!QUIZ[sid] || !QUIZ[sid][i]) return;
+  if (!canUseSkill(sid)) return;
   state.quiz = { sid, i, answers: new Array(QUIZ[sid].length).fill(null), done: false, solo: true };
   if (pitContext) state.quiz.pitContext = pitContext;   // 练完回坑页，别丢了上下文
   state.view = 'quiz';
@@ -947,8 +994,9 @@ function renderPanel(){
   // 每个知识点挂了讲义（lessons/lessons.all.js）就在标题下面铺开四段。
   // 讲义按 t 跟 pts 原文对，对不上就退回只显示标题，不硬凑。
   const lessonList = (typeof LESSONS_BY_SKILL !== 'undefined' && LESSONS_BY_SKILL[id]) || null;
+  const allowed = canUseSkill(id);
   const pts = (s.pts || []).map(p => {
-    const hit = lessonList && lessonList.find(x => x.t === p);
+    const hit = allowed && lessonList && lessonList.find(x => x.t === p);
     if (!hit || !hit.body) return `<li>${p}</li>`;
     const segs = hit.body.split(/(?=二、|三、|四、)/).map(t => `<p>${t}</p>`).join('');
     return `<li><b class="pt-t">${p}</b><div class="pt-body">${segs}</div></li>`;
@@ -995,7 +1043,8 @@ function renderPanel(){
     ${(s.unsure || domUnsure) ? `<div class="unsure">⚠ ${s.unsure || domUnsure}</div>` : ''}
 
     <div class="p-sec p-sec-learn">怎么学 · 视频</div>
-    ${vids.length ? vids.map(v => `
+    ${allowed
+      ? (vids.length ? vids.map(v => `
       <div class="vcard">
         <div class="vtitle">${escHtml(v.t)}</div>
         <div class="vmeta">${v.srcName
@@ -1005,7 +1054,8 @@ function renderPanel(){
           <button class="btn mini" data-play="${v.bv}" data-page="${v.page || ''}">在本页看</button>
           <a class="btn mini" href="https://www.bilibili.com/video/${v.bv}${v.page ? '?p=' + v.page : ''}" target="_blank" rel="noopener noreferrer">去 B站</a>
         </div>
-      </div>`).join('') : '<div style="font-size:13px;color:var(--txt3)">这一课还没找到合适的视频</div>'}
+      </div>`).join('') : '<div style="font-size:13px;color:var(--txt3)">这一课还没找到合适的视频</div>')
+      : lockCard({ title: '讲义正文、视频和题要激活码', note: '上面那份考点清单是公开的，怎么考、坑在哪也都给你看。要练要讲的部分在里面。' })}
     <div id="player-slot"></div>
 
     <div class="p-sec">要先学会</div>
@@ -1019,14 +1069,16 @@ function renderPanel(){
     ${nextStep ? `<div class="nextup">这一步走完了，下一步建议学：<b data-goto-skill="${nextStep}">${byId[nextStep].n}</b></div>` : ''}
 
     <div class="p-actions">
-      ${lit
+      ${!allowed
+        ? `<span class="p-hint">这一课的题要激活后才能做</span>`
+        : lit
         ? `<button class="btn lit" data-act="toggle">已点亮 · 点此取消</button>`
         : q
           ? `<button class="btn primary" data-act="quiz">${unlocked ? `开始结业挑战（${QUIZ[id].length} 题）` : '先做做看（要先学的那几课没点亮，做对也不算）'}</button>`
           : `<button class="btn primary" data-act="toggle" ${unlocked ? '' : 'disabled'}>${unlocked ? '点亮它（这课没配题）' : '要先学会前面的课'}</button>`}
       <button class="btn" data-act="goal">设为目标</button>
     </div>
-    ${q ? `<div class="p-hint">${lit ? '已通过结业挑战' : `${quizRule(QUIZ[id].length)}才能点亮${best ? ` · 你目前最好成绩 ${Math.round(best * 100)}%` : ''}`}</div>` : ''}
+    ${allowed && q ? `<div class="p-hint">${lit ? '已通过结业挑战' : `${quizRule(QUIZ[id].length)}才能点亮${best ? ` · 你目前最好成绩 ${Math.round(best * 100)}%` : ''}`}</div>` : ''}
     ${state.goal === id
       ? `<div style="font-size:13px;color:#a9cbef;margin-top:6px">当前目标就是它 ·
            <a data-goal-clear style="color:#7fb0e8;cursor:pointer;text-decoration:underline">取消目标</a></div>`
@@ -1039,6 +1091,7 @@ function renderPanel(){
  * ======================================================================= */
 function startQuiz(sid){
   if (!hasQuiz(sid)) return;
+  if (!canUseSkill(sid)) return;          // 没激活不留草稿、不消耗题
   const n = QUIZ[sid].length;
   // 每次挑战题目顺序都重排。即时给答案是有意的（自学需要反馈），
   // 但至少要堵住"记住第几题选什么"这条路。
@@ -1253,6 +1306,7 @@ function buildBasicPaper(){
 }
 
 function startMock(mode){
+  if (!gateOn()) return;                  // 模拟考整卷要激活
   const basic = mode === 'basic';
   const paper = basic ? buildBasicPaper() : buildPaper('normal');
   state.mock = {
@@ -1341,6 +1395,12 @@ function quitMock(){
 
 function renderMock(){
   const main = document.getElementById('main');
+  if (!gateOn()){
+    main.innerHTML = `<div class="crumbs"><a data-go="home">领域总览</a> / <span>模拟考</span></div>
+      <div class="sec-title"><h2>模拟考</h2><span>15 选择 + 5 填空 + 4 解答，150 分 / 120 分钟</span></div>
+      ${lockCard({ title: '整卷和模拟考要激活码', note: '平时练习、错题本、易错点在 ' + freeDomainNames() + ' 里都能用。整卷是付费部分。' })}`;
+    return;
+  }
   const m = state.mock;
   if (!m){ main.innerHTML = `<div class="empty">没有正在进行的模拟考</div>`; return; }
   const p = m.paper;
@@ -1812,6 +1872,14 @@ function buildPaper(mode){
 }
 
 function renderPaper(){
+  // 错题卷是自己做错过的题，属于本人记录，不锁；整卷要激活
+  if (state.paperMode !== 'wrong' && !gateOn()){
+    const main2 = document.getElementById('main');
+    main2.innerHTML = `<div class="crumbs"><a data-go="home">领域总览</a> / <span>练习卷</span></div>
+      <div class="sec-title"><h2>生成练习卷</h2><span>15 选择 + 5 填空 + 4 解答，结构和真卷一致</span></div>
+      ${lockCard({ title: '整卷要激活码', note: '错题本、易错点在 ' + freeDomainNames() + ' 里都能用。整卷和模拟考是付费部分。' })}`;
+    return;
+  }
   if (!paperCache) paperCache = buildPaper(state.paperMode);
   const p = paperCache;
   const isWrong = p.mode === 'wrong';
@@ -2032,7 +2100,8 @@ function renderPitDetail(pitId){
   const main = document.getElementById('main');
   const p = PIT_BY_ID[pitId];
   if (!p){ state.pitId = null; return renderPits(); }
-  const qs = questionsOfPit(pitId);
+  const allQs = questionsOfPit(pitId);
+  const qs = allQs.filter(x => canUseSkill(x.sid));       // 免费领域之外的题不列出来
   const rec = (state.pitDone && state.pitDone[pitId]) || {};
   const passed = qs.filter(x => rec[pitQuestionKey(x.sid, x.i)]).length;
   const rows = qs.map(x => {
@@ -2055,7 +2124,10 @@ function renderPitDetail(pitId){
     </div>
     <div class="hint-line">${p.desc}</div>
     <div class="sec-title" style="margin-top:22px"><h2>只练这个坑</h2><span>点一道单练，答对会记下来，练完回到这一页</span></div>
-    <div class="slist">${rows}</div>
+    ${qs.length
+      ? `<div class="slist">${rows}</div>`
+      : '<div class="empty">这个坑的题都在要激活的领域里<br><span>上面的说明和「会在这几课踩到」还是公开的</span></div>'}
+    ${allQs.length > qs.length ? lockCard({ title: '还有 ' + (allQs.length - qs.length) + ' 道题在付费内容里', note: freeDomainNames() + '的题是免费的，其余领域要激活。' }) : ''}
     <div style="margin-top:20px"><button class="btn" data-go="pit">← 回易错点列表</button></div>`;
 }
 
@@ -2073,6 +2145,12 @@ function renderAbout(){
       <p>复数部分参考 2025、2026 年真题评述，以及杨宏英《职教高考数学试题之变的思考与启示》（《广东教育》2025 年第 4 期）。</p>
       <h3>视频和学习进度</h3>
       <p>视频来自 B 站公开内容，版权归各 UP 主。进度只存在这台设备的浏览器里，换设备用「更多」里的导出和导入。</p>
+      <h3>免费开放到哪</h3>
+      ${gateOn()
+        ? `<p><strong>已经激活了</strong>，${SKILLS.length} 课全开。激活状态存在这台设备的浏览器里；换手机、换浏览器、清缓存要重新输一次同一个码，不用重新买。进度是另一回事，要用导出带过去。</p>`
+        : `<p>不用激活就能用的：整张技能树地图（${SKILLS.length} 课的名字、分值、前置关系）、每个技能的考点清单和考情、「坑在哪」、易错点的 ${PIT.length} 条说明，以及<b>${freeDomainNames()}</b>这几个领域全部内容——讲义正文、${freeSkillCount()} 课的题和视频都能正常做。</p>
+           <p>其余领域要激活码：讲义正文、题目、视频、整卷和模拟考。地图和考点清单照样能看。</p>
+           <p>激活码在群里发，找群主拿。换手机或清缓存要重新输，同一个码，不用重新买。</p>`}
     </div>`;
 }
 
